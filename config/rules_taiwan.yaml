@@ -1,0 +1,117 @@
+# =============================================================================
+# L2 rule pack: Taiwan, utility-owned plant.
+#
+# A rule reads asset attributes from the plant file and, when it applies,
+# inserts review/inspection nodes into the network through a template.
+#
+# status:
+#   verified  -> process confirmed against law text or official guidance; used in the model
+#   pending   -> listed in the register only; NOT inserted until verified
+#
+# process_grade: how well the PROCESS is sourced (A = law text / official guidance)
+# duration_grade: how well the DURATION is sourced (C = practitioner estimate)
+#
+# Swap this file to model another jurisdiction or owner type. The engine and the
+# physical logic in the plant file stay unchanged.
+# =============================================================================
+
+display_name: "Taiwan, utility-owned plant"
+jurisdiction: "Taiwan"
+owner_type: utility
+
+rules:
+  - id: R01
+    name: "Fixed crane completion inspection"
+    status: verified
+    legal_basis: "危險性機械及設備安全檢查規則 (fixed crane completion inspection)"
+    applies_if: {type: fixed_crane, capacity_t_gte: 3}
+    template: crane_inspection
+    process_grade: A
+    duration_grade: C
+    params:
+      doc_prep: {dist: triangular, min: 5, mode: 10, max: 20}
+      inspection: {dist: lognormal, median: 28, p90: 45}
+    note: >
+      Application is filed only after installation is complete; the inspection body
+      then schedules the date and the load test. Durations are a practitioner
+      estimate: installation about 3-4 weeks, crane usable only after about
+      2-2.5 months.
+
+  - id: R02
+    name: "HV equipment test reports accepted before power delivery"
+    status: verified
+    legal_basis: "Taipower equipment acceptance rules; type/characteristic tests (e.g. TERTEC)"
+    applies_if: {type: hv_equipment}
+    template: hv_test_reports
+    process_grade: A
+    duration_grade: C
+    params:
+      review: {dist: lognormal, median: 45, p90: 90}
+    note: >
+      Test reports must be reviewed and accepted before power is delivered.
+      Position in the sequence (before shipment vs after arrival) is an assumption.
+
+  - id: R03
+    name: "HV completion test before energisation"
+    status: verified
+    legal_basis: "High-voltage equipment completion test before power delivery"
+    applies_if: {type: hv_equipment}
+    template: hv_completion_test
+    process_grade: A
+    duration_grade: C
+    params:
+      test: {dist: triangular, min: 10, mode: 14, max: 25}
+    note: "Performed by an authorised testing body or registered electrical engineering firm."
+
+  - id: R04
+    name: "Grid connection: operation-sequence notice, energisation, power feeding"
+    status: verified
+    legal_basis: "Taipower system-connection procedure (operation sequence sheet to dispatch at least two weeks ahead)"
+    applies_if: {type: hv_equipment, grid_connected: true}
+    template: grid_energisation
+    process_grade: B
+    duration_grade: C
+    params:
+      notice_days: 14
+      energisation: {dist: triangular, min: 3, mode: 5, max: 10}
+      power_feed: {dist: triangular, min: 1, mode: 2, max: 5}
+    note: >
+      The two-week notice comes from Taipower's customer-side rules; the internal
+      procedure for a utility-owned plant may differ and is to be confirmed.
+
+  - id: R05
+    name: "Air permit: operating-permit review and test-run notice"
+    status: verified
+    legal_basis: "固定污染源設置操作及燃料使用許可證管理辦法"
+    applies_if: {type: stationary_emission_source}
+    template: air_permit
+    process_grade: A
+    duration_grade: C
+    params:
+      review: {dist: lognormal, median: 60, p90: 120}
+    note: >
+      First fire starts the permit test run. The test run is time-limited
+      (90 days in an earlier version of the rule unless extended); check the
+      current article before relying on the exact number.
+
+  - id: R06
+    name: "Wastewater discharge permit"
+    status: pending
+    legal_basis: "Water pollution control permits (to be verified)"
+    applies_if: {type: wastewater_discharge}
+    template: none
+    process_grade: "-"
+    duration_grade: "-"
+    params: {}
+    note: "Listed for awareness. Not inserted into the network until the legal basis is verified."
+
+  - id: R07
+    name: "Boiler / pressure vessel inspection (HRSG applicability)"
+    status: pending
+    legal_basis: "危險性機械及設備安全檢查規則 (dangerous equipment), applicability to be verified"
+    applies_if: {type: pressure_equipment}
+    template: none
+    process_grade: "-"
+    duration_grade: "-"
+    params: {}
+    note: "Candidate rule. No asset of this type is declared in v1."

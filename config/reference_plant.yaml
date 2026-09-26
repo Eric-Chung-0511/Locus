@@ -1,0 +1,498 @@
+# =============================================================================
+# Reference plant: generic single-shaft CCGT (GT - Generator - ST on one shaft,
+# HRSG without bypass stack), ONE unit, utility-owned, medium granularity.
+#
+# This is a fictional reference model built from general engineering practice
+# and public sources. It does not describe any real project. All durations are
+# illustrative assumptions unless a source grade says otherwise.
+#
+# Conventions
+#   - Time unit: days. Day 0 = site mobilisation / first piling.
+#   - Weather-sensitive activities (weather: rain | wind): duration = WORKING days;
+#     a day is lost when the day's weather exceeds the stoppage threshold.
+#     rain: civil and outdoor work (piling, foundations, tunnels); indoor work
+#           continues once the building envelope is closed, so it is not rain-sensitive.
+#     wind: wind-limited lifts (steel erection, cladding, pipe rack, HRSG heavy lifts).
+#           Wind only WARNS by default; it stops work only under the wind rule the
+#           user chooses in the app (threshold, share of windy spells, remobilisation days).
+#   - All other activities: duration = CALENDAR days.
+#   - Link relations: FS (start after predecessor finishes + lag),
+#                     SS (start after predecessor starts + lag). Lag in calendar days.
+#   - Link types (first-principles classification):
+#       physical    : cannot be broken (cause-and-effect in the physical world)
+#       means       : the invariant holds, but the MEANS can be swapped
+#       regulatory  : cannot be broken, but preparation can start earlier
+#       contractual : negotiable between parties
+#       resource    : crew / sequence / practice choice, field can adjust
+#       logistics   : space, access, crane stands, haul routes
+#   - A link with `relax:` is a candidate for "which links can we break to recover
+#     time". `relax` describes the alternative logic, the `proposal` as it is said
+#     on site, and what it costs.
+#   - Every activity and external input needs a unique `short_name` (max 30
+#     characters) used on chart axes; tables and hover text use the full `name`.
+#   - Source grades: A = official data / law text, B = industry or public document,
+#                    C = explicit assumption or practitioner estimate.
+# =============================================================================
+
+meta:
+  name: "Reference single-shaft CCGT (generic, 1 unit)"
+  owner_type: utility            # utility | ipp  (changes the review path in the rule pack)
+  configuration: single_shaft_no_bypass_stack
+  milestone: FIRST_FIRE
+  default_start_date: "2027-01-04"
+  disclaimer: >
+    Fictional reference plant built from general practice and public sources.
+    Not based on, and not representative of, any specific real project.
+
+groups:
+  - "Construction: Turbine Hall"
+  - "Construction: HRSG"
+  - "Construction: linear assets"
+  - "Construction: transformer yard"
+  - "Balance of plant"
+  - "External inputs"
+  - "Gate 0: power receipt"
+  - "Gate A: condenser vacuum"
+  - "Gate B: GT spin"
+  - "Gate C: first-fire items"
+  - "Reviews and permits"
+
+# -----------------------------------------------------------------------------
+# External inputs (interface nodes). Design, procurement and transport are not
+# expanded in v1; each major package is an arrival event with a delay spread.
+# The tool back-calculates the latest acceptable arrival for each of them.
+# -----------------------------------------------------------------------------
+externals:
+  - {id: HRSG_MOD_DELIV, name: "HRSG modules on site (first batch)", short_name: "HRSG modules arrive", group: "External inputs",
+     planned_day: 230, delay: {dist: triangular, min: 0, mode: 10, max: 45},
+     source: {grade: C, note: "Illustrative planned arrival"}}
+  - {id: GT_DELIV, name: "Gas turbine on site", short_name: "Gas turbine arrives", group: "External inputs",
+     planned_day: 330, delay: {dist: triangular, min: 0, mode: 10, max: 60},
+     source: {grade: C, note: "Illustrative planned arrival"}}
+  - {id: GEN_DELIV, name: "Generator on site", short_name: "Generator arrives", group: "External inputs",
+     planned_day: 330, delay: {dist: triangular, min: 0, mode: 10, max: 60},
+     source: {grade: C, note: "Illustrative planned arrival"}}
+  - {id: ST_DELIV, name: "Steam turbine and condenser on site", short_name: "ST and condenser arrive", group: "External inputs",
+     planned_day: 345, delay: {dist: triangular, min: 0, mode: 10, max: 60},
+     source: {grade: C, note: "Illustrative planned arrival"}}
+  - {id: TX_DELIV, name: "Step-up transformer on site", short_name: "Step-up transformer arrives", group: "External inputs",
+     planned_day: 470, delay: {dist: triangular, min: 0, mode: 15, max: 90},
+     source: {grade: B, note: "Long-lead item ordered at project start; industry surveys report roughly 2-3 year lead times for large power transformers"}}
+  - {id: SWYD_READY, name: "Grid-side switchyard ready for connection", short_name: "Grid switchyard ready", group: "External inputs",
+     planned_day: 540, delay: {dist: triangular, min: 0, mode: 30, max: 150},
+     source: {grade: C, note: "Grid-side scope; spread reflects interface uncertainty"}}
+
+# -----------------------------------------------------------------------------
+# Activities
+# -----------------------------------------------------------------------------
+activities:
+  # ---- Turbine Hall ---------------------------------------------------------
+  - {id: TH_PILE, name: "Turbine Hall piling", short_name: "Turbine hall piling", group: "Construction: Turbine Hall",
+     condition: weather, weather: rain, site_start: true, earliest_day: 0,
+     duration: {dist: triangular, min: 60, mode: 75, max: 100},
+     source: {grade: C, note: "Pile type is a site-layer parameter (set by geology)"}}
+  - {id: TH_FDN, name: "Turbine Hall foundations and TG pedestal", short_name: "Turbine hall foundations", group: "Construction: Turbine Hall",
+     condition: weather, weather: rain,
+     duration: {dist: triangular, min: 120, mode: 150, max: 190},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: TH_STEEL_MAIN, name: "Turbine Hall steel, GT and ST bays to crane-rail height", short_name: "Turbine hall steel, main bays", group: "Construction: Turbine Hall",
+     condition: weather, weather: wind,
+     duration: {dist: triangular, min: 75, mode: 90, max: 120},
+     source: {grade: C, note: "Only the main-equipment bays are needed before the crane goes up"}}
+  - {id: TH_STEEL_EEB, name: "Turbine Hall steel, electrical bay", short_name: "Electrical bay steel", group: "Construction: Turbine Hall",
+     condition: weather, weather: wind,
+     duration: {dist: triangular, min: 40, mode: 50, max: 70},
+     source: {grade: C, note: "Runs in parallel with crane installation"}}
+  - {id: TH_ROOF_CLAD, name: "Turbine Hall roofing and cladding", short_name: "Turbine hall roof & cladding", group: "Construction: Turbine Hall",
+     condition: weather, weather: wind,
+     duration: {dist: triangular, min: 65, mode: 80, max: 105},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: TH_CRANE_INST, name: "Overhead crane installation", short_name: "Overhead crane installation", group: "Construction: Turbine Hall",
+     condition: productivity,
+     duration: {dist: triangular, min: 18, mode: 22, max: 28},
+     source: {grade: C, note: "Practitioner estimate: rail, crane lift and internal adjustment about 3-4 weeks"}}
+  - {id: GT_ONBASE, name: "GT set on base", short_name: "GT on base", group: "Construction: Turbine Hall",
+     condition: productivity, duration: {dist: triangular, min: 10, mode: 14, max: 21},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: GEN_ONBASE, name: "Generator set on base", short_name: "Generator on base", group: "Construction: Turbine Hall",
+     condition: productivity, duration: {dist: triangular, min: 10, mode: 14, max: 21},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: ST_ONBASE, name: "ST and condenser set on base", short_name: "ST and condenser on base", group: "Construction: Turbine Hall",
+     condition: productivity, duration: {dist: triangular, min: 18, mode: 24, max: 35},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: SHAFT_ALIGN, name: "Shaft alignment, grouting and coupling", short_name: "Shaft alignment", group: "Construction: Turbine Hall",
+     condition: productivity, duration: {dist: triangular, min: 45, mode: 60, max: 85},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: GT_INTAKE_INST, name: "GT air intake installation", short_name: "GT air intake", group: "Construction: Turbine Hall",
+     condition: productivity, duration: {dist: triangular, min: 40, mode: 50, max: 70},
+     source: {grade: C, note: "Elevated external lifts. No wind warning or wind stoppage for now (author's decision)"}}
+  - {id: TH_MECH, name: "Turbine Hall piping and auxiliaries", short_name: "Turbine hall piping", group: "Construction: Turbine Hall",
+     condition: productivity, duration: {dist: triangular, min: 210, mode: 240, max: 300},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: TH_EI, name: "Turbine Hall E&I: cable pulling, termination, loop check", short_name: "Turbine hall E&I", group: "Construction: Turbine Hall",
+     condition: productivity, duration: {dist: triangular, min: 240, mode: 270, max: 330},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: EEB_EI, name: "Electrical bay E&I and MV/LV switchgear", short_name: "Electrical bay E&I", group: "Construction: Turbine Hall",
+     condition: productivity, duration: {dist: triangular, min: 130, mode: 150, max: 190},
+     source: {grade: C, note: "Illustrative"}}
+
+  # ---- HRSG -----------------------------------------------------------------
+  - {id: HRSG_PILE, name: "HRSG piling", short_name: "HRSG piling", group: "Construction: HRSG",
+     condition: weather, weather: rain, site_start: true, earliest_day: 30,
+     duration: {dist: triangular, min: 50, mode: 65, max: 90},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: HRSG_FDN, name: "HRSG and stack foundations", short_name: "HRSG foundations", group: "Construction: HRSG",
+     condition: weather, weather: rain,
+     duration: {dist: triangular, min: 75, mode: 90, max: 120},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: HRSG_ERECT, name: "HRSG steel, casing, modules, piggyback (secondary) panels and drums (heavy lifts)", short_name: "HRSG erection", group: "Construction: HRSG",
+     condition: weather, weather: wind,
+     duration: {dist: triangular, min: 110, mode: 130, max: 170},
+     source: {grade: C, note: "Tall heavy lifts are wind-limited. The north-east monsoon (Oct-Mar) brings frequent strong wind on the west coast"}}
+  - {id: HRSG_PP, name: "HRSG pressure parts, piping and stack", short_name: "HRSG pressure parts", group: "Construction: HRSG",
+     condition: productivity, duration: {dist: triangular, min: 180, mode: 210, max: 260},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: HRSG_HYDRO, name: "HRSG hydrostatic test", short_name: "HRSG hydrotest", group: "Construction: HRSG",
+     condition: productivity, duration: {dist: triangular, min: 10, mode: 14, max: 21},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: HRSG_INSUL, name: "HRSG insulation and cladding", short_name: "HRSG insulation", group: "Construction: HRSG",
+     condition: productivity, duration: {dist: triangular, min: 70, mode: 90, max: 120},
+     source: {grade: C, note: "Illustrative"}}
+
+  # ---- Linear assets (cross the whole site: common-cause nodes) ---------------
+  - {id: PIPERACK, name: "Main pipe rack structure", short_name: "Pipe rack structure", group: "Construction: linear assets",
+     condition: weather, weather: wind,
+     duration: {dist: triangular, min: 80, mode: 100, max: 130},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: RACK_PIPING, name: "Pipe rack piping", short_name: "Pipe rack piping", group: "Construction: linear assets",
+     condition: productivity, duration: {dist: triangular, min: 120, mode: 150, max: 190},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: CWT_SEG1, name: "Circulating water tunnel, early segments", short_name: "CW tunnel, early segments", group: "Construction: linear assets",
+     condition: weather, weather: rain,
+     duration: {dist: triangular, min: 150, mode: 180, max: 230},
+     source: {grade: C, note: "Starts after adjacent piling has cured"}}
+  - {id: CWT_SEG2, name: "Circulating water tunnel, remaining segments", short_name: "CW tunnel, remaining", group: "Construction: linear assets",
+     condition: weather, weather: rain,
+     duration: {dist: triangular, min: 110, mode: 130, max: 170},
+     source: {grade: C, note: "Crosses heavy-lift crane stand area"}}
+  - {id: CBT_SEG1, name: "Cable tunnel, early segments", short_name: "Cable tunnel, early segments", group: "Construction: linear assets",
+     condition: weather, weather: rain,
+     duration: {dist: triangular, min: 90, mode: 110, max: 140},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: CBT_SEG2, name: "Cable tunnel, remaining segments", short_name: "Cable tunnel, remaining", group: "Construction: linear assets",
+     condition: weather, weather: rain,
+     duration: {dist: triangular, min: 90, mode: 110, max: 140},
+     source: {grade: C, note: "Interleaved with Turbine Hall steel logistics"}}
+
+  # ---- Transformer yard -----------------------------------------------------
+  - {id: TX_FDN, name: "Transformer foundations and fire walls", short_name: "Transformer foundations", group: "Construction: transformer yard",
+     condition: weather, weather: rain, site_start: true, earliest_day: 200,
+     duration: {dist: triangular, min: 45, mode: 60, max: 80},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: TX_INSTALL, name: "Transformer setting, assembly and oil filling", short_name: "Transformer installation", group: "Construction: transformer yard",
+     condition: productivity, duration: {dist: triangular, min: 35, mode: 45, max: 65},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: TX_TEST, name: "Transformer site tests", short_name: "Transformer site tests", group: "Construction: transformer yard",
+     condition: productivity, duration: {dist: triangular, min: 10, mode: 14, max: 21},
+     source: {grade: C, note: "Illustrative"}}
+
+  # ---- Balance of plant (summary nodes; float absorbs logistics adjustments) --
+  - {id: BOP_CW_INTAKE, name: "CW intake and pump house", short_name: "CW intake and pump house", group: "Balance of plant",
+     condition: weather, weather: rain, site_start: true, earliest_day: 120,
+     duration: {dist: triangular, min: 280, mode: 340, max: 430},
+     source: {grade: C, note: "Summary node"}}
+  - {id: BOP_WATER, name: "Raw, demin and fire water systems ready", short_name: "Water systems ready", group: "Balance of plant",
+     condition: productivity, site_start: true, earliest_day: 240,
+     duration: {dist: triangular, min: 300, mode: 360, max: 450},
+     source: {grade: C, note: "Summary node"}}
+  - {id: BOP_GAS, name: "Fuel gas receiving station ready", short_name: "Gas receiving station", group: "Balance of plant",
+     condition: productivity, site_start: true, earliest_day: 360,
+     duration: {dist: triangular, min: 250, mode: 300, max: 380},
+     source: {grade: C, note: "Summary node"}}
+
+  # ---- Gate 0: power receipt (rule pack adds the review chain) ----------------
+  - {id: MV_LV_BACKFEED, name: "Plant MV/LV distribution energised", short_name: "MV/LV backfeed", group: "Gate 0: power receipt",
+     condition: productivity, duration: {dist: triangular, min: 14, mode: 21, max: 30},
+     source: {grade: C, note: "Illustrative"}}
+
+  # ---- Gate A: condenser vacuum -----------------------------------------------
+  - {id: C_IA, name: "Instrument air system", short_name: "Instrument air", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 14, mode: 21, max: 30},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_CCCW, name: "Closed cooling water system", short_name: "Closed cooling water", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 21, mode: 30, max: 42},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_CW, name: "Circulating water system (heat sink)", short_name: "Circulating water", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 21, mode: 30, max: 45},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_LUBE, name: "Lube and seal oil flushing and operation", short_name: "Lube and seal oil", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 30, mode: 45, max: 65},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_CTRL_OIL, name: "Control oil flushing", short_name: "Control oil flushing", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 10, mode: 14, max: 21},
+     source: {grade: C, note: "Practitioner estimate: about 2 weeks under normal conditions"}}
+  - {id: C_COND_FW, name: "Condensate and feedwater systems", short_name: "Condensate and feedwater", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 25, mode: 35, max: 50},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_AUX_STEAM, name: "Auxiliary and gland steam available", short_name: "Aux and gland steam", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 14, mode: 21, max: 30},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_VALVES, name: "ST main and bypass valves stroked and loop-checked", short_name: "ST valves stroked", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 14, mode: 21, max: 30},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_TURNING, name: "ST on turning gear", short_name: "ST on turning gear", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 5, mode: 7, max: 10},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: GATE_A, name: "Gate A: condenser vacuum established", short_name: "Gate A: vacuum", group: "Gate A: condenser vacuum",
+     condition: productivity, duration: {dist: triangular, min: 3, mode: 5, max: 8},
+     source: {grade: C, note: "Generic commissioning logic"}}
+
+  # ---- Gate B: GT spin ----------------------------------------------------------
+  - {id: C_INTAKE_BOXUP, name: "GT intake final box-up", short_name: "GT intake box-up", group: "Gate B: GT spin",
+     condition: productivity, duration: {dist: triangular, min: 7, mode: 10, max: 14},
+     source: {grade: C, note: "Must precede any GT-side rotation"}}
+  - {id: C_GT_TURN, name: "GT-side shaft on turning gear", short_name: "GT on turning gear", group: "Gate B: GT spin",
+     condition: productivity, duration: {dist: triangular, min: 3, mode: 5, max: 7},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_SFC_DCS, name: "SFC, DCS and interlocks ready", short_name: "SFC, DCS and interlocks", group: "Gate B: GT spin",
+     condition: productivity, duration: {dist: triangular, min: 25, mode: 35, max: 50},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_H2, name: "Generator hydrogen charging", short_name: "Hydrogen charging", group: "Gate B: GT spin",
+     condition: productivity, duration: {dist: triangular, min: 7, mode: 10, max: 14},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: GATE_B, name: "Gate B: GT spin (no firing)", short_name: "Gate B: GT spin", group: "Gate B: GT spin",
+     condition: productivity, duration: {dist: triangular, min: 3, mode: 5, max: 8},
+     source: {grade: C, note: "Generic commissioning logic"}}
+
+  # ---- Gate C: first-fire items -------------------------------------------------
+  - {id: C_HRSG_FILL, name: "HRSG filled", short_name: "HRSG filled", group: "Gate C: first-fire items",
+     condition: productivity, duration: {dist: triangular, min: 3, mode: 5, max: 7},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_FUEL_GAS, name: "Fuel gas system ready", short_name: "Fuel gas system", group: "Gate C: first-fire items",
+     condition: productivity, duration: {dist: triangular, min: 18, mode: 25, max: 35},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: C_FIRE_FG, name: "Fire protection and F&G ready", short_name: "Fire protection and F&G", group: "Gate C: first-fire items",
+     condition: productivity, duration: {dist: triangular, min: 21, mode: 30, max: 45},
+     source: {grade: C, note: "Generic commissioning logic"}}
+  - {id: FIRST_FIRE, name: "GT first fire", short_name: "First fire", group: "Gate C: first-fire items",
+     condition: milestone, duration: {dist: fixed, value: 0},
+     source: {grade: C, note: "Root milestone of v1"}}
+
+# -----------------------------------------------------------------------------
+# Links
+# -----------------------------------------------------------------------------
+links:
+  # Turbine Hall
+  - {from: TH_PILE, to: TH_FDN, rel: FS, lag: 0, type: physical, why: "Foundations sit on completed piles"}
+  - {from: TH_FDN, to: TH_STEEL_MAIN, rel: SS, lag: 90, type: physical, why: "Steel starts on foundation portions that have reached strength"}
+  - {from: TH_STEEL_MAIN, to: TH_STEEL_EEB, rel: SS, lag: 40, type: resource, why: "Same erection crews move bay by bay"}
+  - {from: TH_STEEL_MAIN, to: TH_ROOF_CLAD, rel: FS, lag: 0, type: physical, why: "Roof needs its supporting frame"}
+  - {from: TH_STEEL_MAIN, to: TH_CRANE_INST, rel: FS, lag: 0, type: physical, why: "Crane runway must span the main-equipment bays at design height"}
+  - {from: GT_DELIV, to: GT_ONBASE, rel: FS, lag: 0, type: physical, why: "Equipment must be on site"}
+  - {from: GEN_DELIV, to: GEN_ONBASE, rel: FS, lag: 0, type: physical, why: "Equipment must be on site"}
+  - {from: ST_DELIV, to: ST_ONBASE, rel: FS, lag: 0, type: physical, why: "Equipment must be on site"}
+  - {from: GT_ONBASE, to: SHAFT_ALIGN, rel: FS, lag: 0, type: physical, why: "Whole shaft line must be set before alignment"}
+  - {from: GEN_ONBASE, to: SHAFT_ALIGN, rel: FS, lag: 0, type: physical, why: "Whole shaft line must be set before alignment"}
+  - {from: ST_ONBASE, to: SHAFT_ALIGN, rel: FS, lag: 0, type: physical, why: "Whole shaft line must be set before alignment"}
+  - {from: GT_ONBASE, to: GT_INTAKE_INST, rel: FS, lag: 0, type: physical, why: "Intake ducting connects to the GT inlet"}
+  - {from: GT_ONBASE, to: TH_MECH, rel: SS, lag: 30, type: resource, why: "Piping follows equipment setting area by area"}
+  - {from: ST_ONBASE, to: TH_MECH, rel: SS, lag: 30, type: resource, why: "Main steam and condenser connections need the ST set"}
+  - {from: GEN_ONBASE, to: TH_EI, rel: SS, lag: 60, type: resource, why: "Isolated phase bus and generator cabling need the generator set"}
+  - {from: TH_ROOF_CLAD, to: TH_EI, rel: FS, lag: 0, type: resource,
+     why: "Panels and terminations normally wait for a weather-tight building",
+     relax: {proposal: "Start E&I before the roof is closed", rel: SS, lag: 45, cost: "Temporary weather protection for panels; moisture and dust damage risk; possible rework"}}
+  - {from: PIPERACK, to: TH_EI, rel: FS, lag: 0, type: resource,
+     why: "Cable trays hang on the pipe rack",
+     relax: {proposal: "Hang cable-tray supports with the rack", rel: SS, lag: 45, cost: "Install cable tray supports together with the rack; needs a coordinated lifting plan"}}
+  - {from: CBT_SEG2, to: TH_EI, rel: FS, lag: 0, type: physical, why: "Cables need a complete route"}
+  - {from: TH_STEEL_EEB, to: EEB_EI, rel: FS, lag: 0, type: physical, why: "Switchgear needs its room"}
+  - {from: CBT_SEG1, to: EEB_EI, rel: FS, lag: 0, type: physical, why: "Cables need a complete route"}
+
+  # HRSG
+  - {from: HRSG_PILE, to: HRSG_FDN, rel: FS, lag: 0, type: physical, why: "Foundations sit on completed piles"}
+  - {from: HRSG_FDN, to: HRSG_ERECT, rel: FS, lag: 0, type: physical, why: "Structure needs its foundation"}
+  - {from: HRSG_MOD_DELIV, to: HRSG_ERECT, rel: FS, lag: 0, type: physical, why: "Modules must be on site"}
+  - {from: HRSG_ERECT, to: HRSG_PP, rel: SS, lag: 60, type: resource, why: "Pressure-part work follows erection tier by tier"}
+  - {from: HRSG_PP, to: HRSG_HYDRO, rel: FS, lag: 0, type: physical, why: "Pressure boundary must be complete to test it"}
+  - {from: HRSG_HYDRO, to: HRSG_INSUL, rel: FS, lag: 0, type: physical, why: "Leak checks need bare pipe"}
+
+  # Linear assets
+  - {from: TH_FDN, to: PIPERACK, rel: SS, lag: 60, type: resource, why: "Rack foundations follow the main foundation crews"}
+  - {from: PIPERACK, to: RACK_PIPING, rel: FS, lag: 0, type: physical, why: "Piping needs its support"}
+  - {from: TH_PILE, to: CWT_SEG1, rel: SS, lag: 90, type: logistics, why: "Tunnel starts after adjacent piling has cured; shares the site haul route"}
+  - {from: CWT_SEG1, to: CWT_SEG2, rel: FS, lag: 0, type: resource, why: "Same tunnel crews and formwork"}
+  - {from: HRSG_ERECT, to: CWT_SEG2, rel: FS, lag: 0, type: logistics,
+     why: "Remaining segments cross the HRSG heavy-lift crane stand",
+     relax: {proposal: "Deck over the tunnel at the crane stand", rel: SS, lag: 60, cost: "Relocate the crane stand or build a temporary deck over the tunnel; re-planning and extra cost"}}
+  - {from: TH_PILE, to: CBT_SEG1, rel: SS, lag: 60, type: logistics, why: "Early segments fit between piling zones"}
+  - {from: CBT_SEG1, to: CBT_SEG2, rel: FS, lag: 0, type: resource, why: "Same tunnel crews"}
+  - {from: TH_STEEL_MAIN, to: CBT_SEG2, rel: FS, lag: 0, type: logistics,
+     why: "Remaining segments sit under the steel erection crane stands",
+     relax: {proposal: "Build cable tunnel between steel lifts", rel: SS, lag: 30, cost: "Interleave segments between crane moves; tighter daily coordination"}}
+
+  # Transformer yard
+  - {from: TX_FDN, to: TX_INSTALL, rel: FS, lag: 0, type: physical, why: "Transformer needs its foundation"}
+  - {from: TX_DELIV, to: TX_INSTALL, rel: FS, lag: 0, type: physical, why: "Equipment must be on site"}
+  - {from: TX_INSTALL, to: TX_TEST, rel: FS, lag: 0, type: physical, why: "Tests need an assembled, oil-filled unit"}
+
+  # Gate 0
+  - {from: EEB_EI, to: MV_LV_BACKFEED, rel: FS, lag: 0, type: physical, why: "Switchgear must be installed to receive power"}
+
+  # Gate A
+  - {from: MV_LV_BACKFEED, to: C_IA, rel: FS, lag: 0, type: physical, why: "Compressors need power"}
+  - {from: RACK_PIPING, to: C_IA, rel: FS, lag: 0, type: physical, why: "Air headers must be installed"}
+  - {from: MV_LV_BACKFEED, to: C_CCCW, rel: FS, lag: 0, type: physical, why: "Pumps need power"}
+  - {from: TH_MECH, to: C_CCCW, rel: FS, lag: 0, type: physical, why: "Closed loop must be installed"}
+  - {from: MV_LV_BACKFEED, to: C_CW, rel: FS, lag: 0, type: physical, why: "CW pumps need power"}
+  - {from: CWT_SEG2, to: C_CW, rel: FS, lag: 0, type: physical, why: "Water needs a complete path"}
+  - {from: BOP_CW_INTAKE, to: C_CW, rel: FS, lag: 0, type: physical, why: "Water needs a source"}
+  - {from: C_CCCW, to: C_LUBE, rel: FS, lag: 0, type: physical, why: "Oil coolers need cooling water"}
+  - {from: SHAFT_ALIGN, to: C_LUBE, rel: FS, lag: 0, type: physical, why: "Bearings must be closed up before oil circulation"}
+  - {from: C_CCCW, to: C_CTRL_OIL, rel: FS, lag: 0, type: physical, why: "Control oil unit needs cooling water"}
+  - {from: C_CW, to: C_COND_FW, rel: FS, lag: 0, type: physical, why: "Condensate recirculation needs the heat sink"}
+  - {from: BOP_WATER, to: C_COND_FW, rel: FS, lag: 0, type: physical, why: "Make-up water is needed"}
+  - {from: TH_EI, to: C_COND_FW, rel: FS, lag: 0, type: physical, why: "Loops must be checked"}
+  - {from: C_COND_FW, to: C_AUX_STEAM, rel: FS, lag: 0, type: physical, why: "Gland steam condenser is cooled by condensate"}
+  - {from: RACK_PIPING, to: C_AUX_STEAM, rel: FS, lag: 0, type: physical, why: "Steam lines must be installed"}
+  - {from: C_CTRL_OIL, to: C_VALVES, rel: FS, lag: 0, type: physical, why: "Valve actuators need control oil"}
+  - {from: C_IA, to: C_VALVES, rel: FS, lag: 0, type: physical, why: "Pneumatic valves need instrument air"}
+  - {from: TH_EI, to: C_VALVES, rel: FS, lag: 0, type: physical, why: "Loop checks need terminated cables"}
+  - {from: C_LUBE, to: C_TURNING, rel: FS, lag: 0, type: physical, why: "Bearings need an oil film before rotation"}
+  - {from: C_CW, to: GATE_A, rel: FS, lag: 0, type: physical, why: "Vacuum needs continuous condensing"}
+  - {from: C_COND_FW, to: GATE_A, rel: FS, lag: 0, type: physical, why: "Vacuum needs continuous condensing"}
+  - {from: C_AUX_STEAM, to: GATE_A, rel: FS, lag: 0, type: physical, why: "Gland sealing needs steam"}
+  - {from: C_VALVES, to: GATE_A, rel: FS, lag: 0, type: physical, why: "Vacuum boundary valves must close reliably"}
+  - {from: C_TURNING, to: GATE_A, rel: FS, lag: 0, type: physical, why: "A stationary rotor must never receive gland steam"}
+  - {from: HRSG_INSUL, to: GATE_A, rel: FS, lag: 0, type: resource,
+     why: "Mechanical work, insulation included, is normally closed out before vacuum",
+     relax: {proposal: "Pull vacuum before insulation is done", rel: FS, lag: -20, cost: "Last insulation overlaps hot commissioning; hot-surface safety controls and access permits needed"}}
+
+  # Gate B
+  - {from: GT_INTAKE_INST, to: C_INTAKE_BOXUP, rel: FS, lag: 0, type: physical, why: "Box-up closes the finished intake"}
+  - {from: C_INTAKE_BOXUP, to: C_GT_TURN, rel: FS, lag: 0, type: physical, why: "Any rotation draws air through the intake"}
+  - {from: C_LUBE, to: C_GT_TURN, rel: FS, lag: 0, type: physical, why: "Bearings need an oil film before rotation"}
+  - {from: TH_EI, to: C_SFC_DCS, rel: FS, lag: 0, type: physical, why: "Loop checks need terminated cables"}
+  - {from: EEB_EI, to: C_SFC_DCS, rel: FS, lag: 0, type: physical, why: "SFC sits in the electrical bay"}
+  - {from: MV_LV_BACKFEED, to: C_SFC_DCS, rel: FS, lag: 0, type: physical, why: "SFC needs power"}
+  - {from: C_LUBE, to: C_H2, rel: FS, lag: 0, type: physical, why: "Seal oil must run before hydrogen charging"}
+  - {from: C_GT_TURN, to: GATE_B, rel: FS, lag: 0, type: physical, why: "Shaft must already turn freely"}
+  - {from: C_SFC_DCS, to: GATE_B, rel: FS, lag: 0, type: physical, why: "SFC drives the spin; interlocks must be proven"}
+  - {from: C_H2, to: GATE_B, rel: FS, lag: 0, type: physical, why: "Generator needs its cooling medium"}
+  - {from: C_CCCW, to: GATE_B, rel: FS, lag: 0, type: physical, why: "Auxiliaries need cooling"}
+
+  # Gate C
+  - {from: HRSG_HYDRO, to: C_HRSG_FILL, rel: FS, lag: 0, type: physical, why: "Tested pressure boundary"}
+  - {from: C_COND_FW, to: C_HRSG_FILL, rel: FS, lag: 0, type: physical, why: "Feedwater fills the HRSG"}
+  - {from: BOP_GAS, to: C_FUEL_GAS, rel: FS, lag: 0, type: physical, why: "Gas needs a source"}
+  - {from: RACK_PIPING, to: C_FUEL_GAS, rel: FS, lag: 0, type: physical, why: "Gas line must be installed"}
+  - {from: C_IA, to: C_FUEL_GAS, rel: FS, lag: 0, type: physical, why: "Gas valves need instrument air"}
+  - {from: TH_EI, to: C_FIRE_FG, rel: FS, lag: 0, type: physical, why: "Detectors must be wired"}
+  - {from: BOP_WATER, to: C_FIRE_FG, rel: FS, lag: 0, type: physical, why: "Fire water must be available"}
+  - {from: GATE_A, to: FIRST_FIRE, rel: FS, lag: 0, type: physical, why: "Single shaft, no bypass stack: steam must go to the condenser"}
+  - {from: GATE_B, to: FIRST_FIRE, rel: FS, lag: 0, type: physical, why: "Rotating train proven"}
+  - {from: C_HRSG_FILL, to: FIRST_FIRE, rel: FS, lag: 0, type: physical, why: "Avoid dry-firing the HRSG"}
+  - {from: C_FUEL_GAS, to: FIRST_FIRE, rel: FS, lag: 0, type: physical, why: "Combustion needs fuel"}
+  - {from: C_FIRE_FG, to: FIRST_FIRE, rel: FS, lag: 0, type: physical, why: "Safety systems must be live"}
+
+# -----------------------------------------------------------------------------
+# Common risks (risk drivers). Activity ranges above are drawn independently of
+# each other; a common risk is ONE event that, when it occurs in a simulated
+# future, moves many items together (Hulett's risk driver method).
+#   probability : chance that it occurs in a given future
+#   effect      : factor -> multiplies activity durations (working days for
+#                           weather-sensitive work)
+#                 days   -> adds days to activity durations or external arrivals
+#   impact      : size when it occurs (a distribution, like any duration)
+#   applies_to  : an item is affected when it matches EVERY selector given;
+#                 each selector is a list (ids, groups, conditions, kinds, weather)
+# All four are illustrative assumptions (grade C) for the method, not estimates
+# for a real project. Keep them out of the activity ranges: a range should say
+# how the work varies when no common risk hits it, or the risk counts twice.
+# -----------------------------------------------------------------------------
+risks:
+  - id: SITE_PRODUCTIVITY
+    name: "Site productivity below plan (labour market, rework, supervision)"
+    short_name: "Site productivity"
+    probability: 0.5
+    effect: factor
+    impact: {dist: triangular, min: 1.0, mode: 1.08, max: 1.25}
+    applies_to:
+      groups: ["Construction: Turbine Hall", "Construction: HRSG", "Construction: linear assets",
+               "Construction: transformer yard", "Balance of plant"]
+      conditions: [weather, productivity]
+    source: {grade: C, note: "Illustrative: a site-wide productivity shortfall slows all construction work together"}
+  - id: COMMISSIONING
+    name: "Commissioning slower than planned (system turnover, vendor support)"
+    short_name: "Commissioning pace"
+    probability: 0.4
+    effect: factor
+    impact: {dist: triangular, min: 1.0, mode: 1.10, max: 1.35}
+    applies_to:
+      groups: ["Gate 0: power receipt", "Gate A: condenser vacuum", "Gate B: GT spin", "Gate C: first-fire items"]
+      conditions: [productivity]
+    source: {grade: C, note: "Illustrative: one commissioning team and one set of vendor specialists serve every system"}
+  - id: SUPPLY_CHAIN
+    name: "Supply-chain disruption on major equipment (shipping, factory backlog)"
+    short_name: "Equipment supply chain"
+    probability: 0.25
+    effect: days
+    impact: {dist: triangular, min: 10, mode: 30, max: 90}
+    applies_to:
+      ids: [HRSG_MOD_DELIV, GT_DELIV, GEN_DELIV, ST_DELIV, TX_DELIV]
+    source: {grade: C, note: "Illustrative: a shipping or factory-capacity disruption delays every major package at once"}
+  - id: REVIEW_BACKLOG
+    name: "Authority review backlog (staffing, workload peaks)"
+    short_name: "Review backlog"
+    probability: 0.3
+    effect: factor
+    impact: {dist: triangular, min: 1.0, mode: 1.3, max: 1.8}
+    applies_to:
+      conditions: [regulatory]
+    source: {grade: C, note: "Illustrative: a backlog at the authorities slows every review and inspection"}
+
+# -----------------------------------------------------------------------------
+# Assets: attributes that the rule pack reads to decide which reviews apply.
+# -----------------------------------------------------------------------------
+assets:
+  - id: TH_OHC
+    name: "Turbine Hall overhead crane"
+    short_name: "Crane"
+    type: fixed_crane
+    capacity_t: 150
+    install_activity: TH_CRANE_INST
+    feeds: [GT_ONBASE, GEN_ONBASE, ST_ONBASE]
+    group: "Reviews and permits"
+    # First principle: the invariant is "lifting capacity available", the crane is one means.
+    alt_means:
+      target: GT_ONBASE
+      pred: TH_STEEL_MAIN
+      rel: FS
+      lag: 25
+      proposal: "Set the GT with a temporary heavy lift"
+      cost: "Temporary heavy lift (gantry or jacking) for GT setting; extra contractor cost and a separate lift-plan approval"
+
+  - id: GSU
+    name: "Generator step-up transformer and grid connection"
+    short_name: "GSU"
+    type: hv_equipment
+    voltage_kv: 345
+    grid_connected: true
+    site_test_activity: TX_TEST
+    grid_ready_event: SWYD_READY
+    downstream: [MV_LV_BACKFEED]
+    report_submit_day: 400
+    group: "Gate 0: power receipt"
+
+  - id: UNIT_STACK
+    name: "Unit stack (gas turbine exhaust)"
+    short_name: "Stack"
+    type: stationary_emission_source
+    first_emission_milestone: FIRST_FIRE
+    submission_day: 600
+    group: "Reviews and permits"
+
+  - id: SITE_DISCHARGE
+    name: "Hydrotest, flushing and cleaning wastewater"
+    short_name: "Wastewater"
+    type: wastewater_discharge
+    group: "Reviews and permits"

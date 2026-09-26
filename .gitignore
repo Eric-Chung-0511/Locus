@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.vscode/
+
+# Nothing from real projects belongs in this repository. Keep schedules,
+# drawings and other project material outside this folder; these patterns are
+# a second line of defence only.
+private/
+scripts/private/
+data/raw/
+*.xer
+*.xml
+*.mpp
+*.xlsx
+*.xls
+*.pdf
