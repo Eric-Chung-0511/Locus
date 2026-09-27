@@ -537,6 +537,31 @@ def deterministic_plan(model: Model, daily_p: dict[str, np.ndarray],
     return _point_pass(model, daily_p, scenario, dist.typical_value, lambda spec: 0.0)
 
 
+def point_plan(model: Model, daily_p: dict[str, np.ndarray], scenario: Scenario = Scenario(),
+               durations: str = "typical", deliveries: str = "planned") -> float:
+    """
+    Milestone finish day of one single-number pass (weather as an average loss,
+    common risks left out), with a choice of the single numbers:
+
+        durations   "typical" = most-likely value (mode or median), as in the plan
+                    "mean"    = expected value
+        deliveries  "planned" = on the planned day (no delay), as in the plan
+                    "mean"    = planned day plus the expected delay
+
+    point_plan(model, daily_p, s) equals the deterministic plan. Switching one
+    choice at a time shows how much of the gap to the simulation each
+    optimistic assumption explains (analysis.plan_gap).
+    """
+    duration_of = {"typical": dist.typical_value, "mean": dist.mean_value}
+    delay_of = {"planned": lambda spec: 0.0, "mean": dist.mean_value}
+    if durations not in duration_of:
+        raise ValueError(f"durations must be one of {sorted(duration_of)}, not '{durations}'")
+    if deliveries not in delay_of:
+        raise ValueError(f"deliveries must be one of {sorted(delay_of)}, not '{deliveries}'")
+    times = _point_pass(model, daily_p, scenario, duration_of[durations], delay_of[deliveries])
+    return times[model.milestone][1]
+
+
 def required_horizon(model: Model, daily_p: dict[str, np.ndarray], extra_days: int = 0,
                      quantile: float = HORIZON_QUANTILE, margin: float = HORIZON_MARGIN,
                      step: int = HORIZON_STEP) -> int:

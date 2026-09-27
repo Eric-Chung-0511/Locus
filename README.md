@@ -26,7 +26,7 @@ The reference model is a **generic single-shaft CCGT** (GT, generator and ST on 
 |---|---|
 | Guide | How to read every page, in English or Traditional Chinese (switch at the top) |
 | Summary | One finding per page, each one sentence and one number |
-| Milestone confidence | How likely is the plan date, and how much contingency is needed? |
+| Milestone confidence | How likely is the plan date, why does it miss, and how much contingency is needed? |
 | What drives the date | Which items drive the milestone, and how often? Items that are always critical together are merged into one row; click a bar for its predecessors |
 | Common risks | Which risk that slows many items at once costs the most, and what is removing it worth? |
 | Win time back | Which proposals gain time, how often their link really drives, and what they cost |
@@ -80,6 +80,7 @@ The fifth is **common risks** (risk drivers): one event that slows many items at
 - **Weather switch**: weather is a scenario flag. Off (the default), weather is shown as warnings only and no date changes; on, rain and wind stop weather-sensitive work under the weather parameters. Both modes use the same random numbers, so the difference is weather alone. Without weather the network is max-plus with fixed durations, so a late start can never pass through more than one-for-one (tested); only weather can amplify it.
 - **Headline finding** (default parameters, seed 42, 5,000 iterations): a four-week late start moves P50 first fire by 9 days without weather and 15 days with the Xinwu weather; a twelve-week late start by 50 and 65 days. Weather adds 6 and 15 days to those late starts here, without amplifying them beyond one-for-one.
 - **Forced-stoppage stress test**: every weather-sensitive activity loses a window of days (default 7) on top of the simulated weather; sweeping the window across the schedule shows when a lost week bites and when float absorbs it.
+- **Why the plan misses**: the single-number plan takes four best cases at once. Removing them one at a time on the same random numbers splits the gap exactly: deliveries at their average delay instead of the planned day (+23 days), durations at their average instead of the most likely (+13), merge bias, the simulated average of the latest converging path against a single pass of average paths (+16), and common risks (+34 on the average; on P80 they add about 48, because they also widen the spread), which take the plan to the simulated average (+86); the spread up to P80 adds 30, for 116 days of contingency. That is why the plan date is met in about 2 of 5,000 futures (default parameters, weather off, seed 42, 5,000 iterations).
 - **Criticality Index**: share of futures in which a node is on the driving path, traced back from the milestone through the link that actually set each start.
 - **Common Random Numbers**: every scenario reuses the same random draws, so differences come from the logic change only.
 - **Sized weather horizon**: the simulation keeps only as many days of weather as the plan can reach (a pessimistic plan with every input at its 99.9th percentile, plus the late-start experiment, plus 25%), about 4.4 years for the reference plant with the default settings instead of 10. Weather draws are fixed per calendar day, so the horizon changes memory, never results. 5,000 iterations need about 70 MB.

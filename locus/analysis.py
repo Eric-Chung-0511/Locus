@@ -3,6 +3,7 @@ Decision outputs built on top of simulation results.
 
 Every function answers one question a planner or delivery PM gets asked:
     milestone_summary   -> "How likely is the date?"
+    plan_gap            -> "Why does the single-number plan miss, and by how much for each reason?"
     criticality_table   -> "What actually drives it?"
     driver_chains       -> the same, with items that are always critical together merged
     latest_dates        -> "How late can this delivery / submission be?"
@@ -23,7 +24,7 @@ import pandas as pd
 
 from . import labels as L
 from .model import HARD_LINK_TYPES, Model
-from .simulate import RandomBank, Scenario, SimResult, simulate
+from .simulate import RandomBank, Scenario, SimResult, point_plan, simulate
 from .weather import day_to_date
 
 # A proposal counts as having a measurable effect when it moves P50 by at least
@@ -52,6 +53,97 @@ def milestone_summary(res: SimResult, start: date, target_day: float, plan_day: 
         "p80_date": day_to_date(start, _q(ms, 0.8)),
         "p90_date": day_to_date(start, _q(ms, 0.9)),
     }
+
+
+# ------------------------------------------------------------------- plan gap
+GAP_STEPS = ("deliveries", "durations", "merge", "risks")
+
+
+def plan_gap(model: Model, bank: RandomBank, daily_p: dict[str, np.ndarray],
+             base: SimResult) -> dict:
+    """
+    Split the gap between the single-number plan and the simulation into its causes.
+
+    The plan takes four best cases at once. Each step below removes one of them
+    and measures how far first fire moves, so the steps add up exactly:
+
+        plan        point pass: most-likely durations, deliveries on the planned day,
+                    average weather, no common risks (the deterministic plan)
+        deliveries  point pass with every delivery at planned day + expected delay.
+                    Delays run from 0 upwards, so a delivery can only be late.
+        durations   point pass with every duration at its expected value. For a
+                    right-skewed range the mean is above the most-likely value.
+        merge       simulated MEAN finish without common risks, minus the previous
+                    point pass. A point pass takes max() of the average paths; the
+                    simulation averages max() of the realised paths, and
+                    E[max(X, Y)] >= max(E[X], E[Y]) (Jensen's inequality): first
+                    fire waits for whichever path happens to be latest. When weather
+                    is applied, this step also holds the spread of the weather
+                    (the plan uses the average loss per day).
+        risks       simulated mean with the common risks minus without them
+                    (same random numbers). Zero when the run has no common risks.
+
+    Then  plan + sum(steps) = simulated mean, and P80 - mean is the spread that
+    the contingency must cover on top. The order is fixed; another order would
+    move a few days between steps (they interact through max()), never the total.
+    Durations and deliveries are expected values, so the chain uses the simulated
+    MEAN, not P50; both P50 and P80 are returned for the reader.
+    """
+    scen = base.scenario
+    no_risks = replace(scen, disabled_risks=frozenset(r.id for r in model.risks))
+    plan = point_plan(model, daily_p, scen, "typical", "planned")
+    late_deliveries = point_plan(model, daily_p, scen, "typical", "mean")
+    mean_values = point_plan(model, daily_p, scen, "mean", "mean")
+    finish = base.milestone_finish()
+    with_risks = float(np.mean(finish[np.isfinite(finish)]))
+    if model.risks and len(scen.disabled_risks) < len(model.risks):
+        plain = simulate(model, bank, no_risks).milestone_finish()
+        without_risks = float(np.mean(plain[np.isfinite(plain)]))
+    else:
+        without_risks = with_risks
+    days = {"deliveries": late_deliveries - plan, "durations": mean_values - late_deliveries,
+            "merge": without_risks - mean_values, "risks": with_risks - without_risks}
+    rows, level = [], plan
+    for key in GAP_STEPS:
+        rows.append({"step": key, "days": days[key], "from_day": level, "to_day": level + days[key]})
+        level += days[key]
+    return {
+        "steps": pd.DataFrame(rows),
+        "plan_day": plan, "mean_day": with_risks,
+        "p50_day": _q(finish, 0.5), "p80_day": _q(finish, 0.8),
+        "weather_applied": not scen.ignore_weather,
+        "has_risks": bool(model.risks) and len(scen.disabled_risks) < len(model.risks),
+    }
+
+
+
+def plan_gap_days(gap: dict) -> pd.DataFrame:
+    """
+    The plan gap in whole days, ready to show, with the reference bars added:
+    one row per step, then "mean" (plan to simulated mean), "spread" (mean to
+    P80) and "p80" (plan to P80). Columns: step, days, from_offset, to_offset,
+    offsets counted from the plan day.
+
+    Rounding each step on its own could make the steps add up to one day more or
+    less than the total shown next to them. The cumulative levels are rounded
+    instead and each step is the difference of two rounded levels, so the
+    displayed steps always add up to the displayed totals.
+    """
+    plan = gap["plan_day"]
+    steps = gap["steps"]
+    if not gap.get("has_risks", True):
+        steps = steps[steps["step"] != "risks"]
+    rows, prev = [], 0
+    for _, r in steps.iterrows():
+        level = int(round(r["to_day"] - plan))
+        rows.append({"step": r["step"], "days": level - prev, "from_offset": prev, "to_offset": level})
+        prev = level
+    mean = prev
+    p80 = int(round(gap["p80_day"] - plan))
+    rows += [{"step": "mean", "days": mean, "from_offset": 0, "to_offset": mean},
+             {"step": "spread", "days": p80 - mean, "from_offset": mean, "to_offset": p80},
+             {"step": "p80", "days": p80, "from_offset": 0, "to_offset": p80}]
+    return pd.DataFrame(rows)
 
 
 # ---------------------------------------------------------------- criticality

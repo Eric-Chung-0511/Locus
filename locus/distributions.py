@@ -93,6 +93,28 @@ def sample(spec: Mapping[str, Any], u: np.ndarray) -> np.ndarray:
     raise DistributionError(f"Unsupported dist '{kind}'")
 
 
+def mean_value(spec: Mapping[str, Any]) -> float:
+    """
+    Expected value, used to split the gap between the single-number plan and the
+    simulation (analysis.plan_gap). Closed forms:
+        triangular(a, m, b)          mean = (a + m + b) / 3
+        lognormal(median, P90)       mean = exp(mu + sigma^2 / 2), mu and sigma as in sample()
+        fixed                        mean = value
+    For a right-skewed range the mean lies above the mode (triangular) or the
+    median (lognormal); that difference is what "durations skew late" measures.
+    """
+    kind = spec["dist"]
+    if kind == "triangular":
+        return (float(spec["min"]) + float(spec["mode"]) + float(spec["max"])) / 3.0
+    if kind == "lognormal":
+        mu = math.log(float(spec["median"]))
+        sigma = (math.log(float(spec["p90"])) - mu) / _Z90
+        return math.exp(mu + 0.5 * sigma * sigma)
+    if kind == "fixed":
+        return float(spec["value"])
+    raise DistributionError(f"Unsupported dist '{kind}'")
+
+
 def typical_value(spec: Mapping[str, Any]) -> float:
     """
     Single-point value used for the deterministic 'P6-style' plan:

@@ -70,6 +70,73 @@ METRIC_HELP = {
 }
 
 
+# Why the single-number plan misses: one entry per step of analysis.plan_gap, in
+# chart order, plus the two reference bars. "label" is the chart row (at most 40
+# characters); "phrase" names a step inside a sentence; "what" explains the step; "action" is what a planner can do about it.
+PLAN_GAP_STEPS = {
+    "deliveries": {
+        "label": "Deliveries arrive late",
+        "phrase": "late deliveries",
+        "what": "The plan puts every delivery on its planned day. Delay ranges start at zero, so a delivery "
+                "can be late but never early, and on average it arrives after the planned day.",
+        "action": "Order long-lead items earlier, or hold float in front of the work that needs them.",
+    },
+    "durations": {
+        "label": "Durations skew late",
+        "phrase": "durations that skew late",
+        "what": "The plan uses the most-likely duration. A job can overrun by more than it can underrun "
+                "(for example 60 / 75 / 100 days: most likely 75, average 78), so the average is later.",
+        "action": "Challenge most-likely durations that sit close to the best case; plan with averages.",
+    },
+    "merge": {
+        "label": "Merge bias",
+        "phrase": "merge bias",
+        "label_weather": "Merge bias and weather spread",
+        "what": "First fire waits for the last of several converging paths. Even when each path is on time "
+                "on average, the latest of them usually is not.",
+        "what_weather": " With weather applied, this step also holds the day-to-day spread of the weather, "
+                        "which the plan replaces by an average loss.",
+        "action": "Cut converging paths, or finish paths that are not critical early so they cannot become "
+                  "the latest.",
+    },
+    "risks": {
+        "label": "Common risks",
+        "phrase": "common risks",
+        "what": "Events that slow many items at once (see Common risks). The single-number plan does not "
+                "carry them.",
+        "action": "Mitigate the costliest risk first; the Common risks page ranks them.",
+    },
+    "mean": {
+        "label": "Simulated average",
+        "what": "Where first fire lands on average: the plan plus the four steps above.",
+    },
+    "spread": {
+        "label": "Spread up to P80",
+        "what": "Half of the futures finish after the average. Covering 80% of them needs this much more.",
+        "action": "Only narrower ranges shrink it: firmer quotes, earlier reviews, proven crews.",
+    },
+    "p80": {
+        "label": "P80: contingency needed",
+        "what": "The plan plus every step: the contingency the plan needs to be met in 80% of futures.",
+    },
+}
+
+
+def plan_gap_label(key: str, weather_applied: bool = False) -> str:
+    entry = PLAN_GAP_STEPS[key]
+    return entry.get("label_weather", entry["label"]) if weather_applied else entry["label"]
+
+
+def plan_gap_phrase(key: str) -> str:
+    """A step's name inside a sentence, e.g. "late deliveries"."""
+    return PLAN_GAP_STEPS[key].get("phrase", PLAN_GAP_STEPS[key]["label"].lower())
+
+
+def plan_gap_text(key: str, weather_applied: bool = False) -> str:
+    entry = PLAN_GAP_STEPS[key]
+    return entry["what"] + (entry.get("what_weather", "") if weather_applied else "")
+
+
 def condition_label(code: str) -> str:
     return CONDITION_LABELS.get(code, code.replace("_", " ").capitalize())
 

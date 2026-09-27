@@ -43,7 +43,7 @@ Changing a setting does **not** recalculate. Press **Run** to update every page;
 
 The two-minute view. Each card states one finding in one sentence with its key number, and links to the page that explains it:
 
-- **How likely is the plan date?** The chance that the single-number plan holds, and the contingency needed to reach P80.
+- **How likely is the plan date?** The chance that the single-number plan holds, its largest cause of delay, and the contingency needed to reach P80.
 - **What drives the date?** The item or chain that drives first fire most often, and the share of driving-path links that cannot be broken.
 - **What do common risks cost?** How many days risks that slow many items at once add to P80, and what removing the costliest is worth.
 - **Can we win time back?** The best single proposal against all proposals together.
@@ -68,7 +68,16 @@ These findings are a simulation that demonstrates the method; they are not a for
 - **Contingency needed:** P80 minus the plan date.
 - **The curve:** for each date, the share of futures that have reached first fire by then. Vertical lines mark the plan (and target), P50 and P80.
 
-**Why the plan is optimistic.** Durations skew late (a job can overrun by more than it can underrun), deliveries rarely arrive early, and first fire waits for the last of several converging paths (*merge bias*): even if each path alone is likely to be on time, the chance that *all* of them are is much lower.
+**Why the plan misses (the bar chart).** The single-number plan takes four best cases at once. The chart removes them one at a time, in this order, and shows how many days each moves first fire:
+
+1. **Deliveries arrive late.** The plan puts every delivery on its planned day, but delay ranges start at zero: a delivery can be late, never early. Each delivery is moved to its planned day plus its average delay.
+2. **Durations skew late.** The plan uses the most-likely duration, but a job can overrun by more than it can underrun (60 / 75 / 100 days: most likely 75, average 78). Each duration is moved to its average.
+3. **Merge bias.** Steps 1 and 2 still give one date from average paths. The simulation averages the *latest* of the converging paths in each future, which is later: first fire waits for whichever path happens to be late. With weather applied, this step also holds the spread of the weather, which the plan replaces by an average loss.
+4. **Common risks.** Events that slow many items at once; the single-number plan does not carry them.
+
+Together the four steps take the plan to the **simulated average** (grey). **Spread up to P80** (light blue) is the extra needed to cover 80% of futures instead of the average, and **P80: contingency needed** (dark) is the total. The steps are measured on the same random numbers and add up exactly; the days are rounded so that the steps shown add up to the totals shown. The steps interact, so another order would move a few days between them, never the total. The expander under the chart says what each step means and what a planner can do about it. The common-risks step is how far the risks move the *average*; the Common risks page reports how far they move *P80*, which is more, because risks also widen the spread.
+
+This is also why the chance of meeting the plan can be 0%: the plan needs all four best cases in the same future, and with dozens of items that almost never happens.
 
 These results are a simulation that demonstrates the method; they are not a forecast.
 

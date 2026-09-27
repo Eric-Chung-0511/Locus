@@ -41,10 +41,14 @@ if found:
 
 # 1. Plan probability and contingency
 contingency = S["p80_day"] - S["plan_day"]
+gap_days = A.plan_gap_days(R["gap"])
+largest = gap_days[gap_days["step"].isin(A.GAP_STEPS)].sort_values("days", ascending=False).iloc[0]
 cards.append(("How likely is the plan date?",
               f"The single-number plan ({S['plan_date']:%d %b %Y}) holds in "
-              f"{share_of_futures(S['p_on_plan'], R['base'].milestone_finish().size)}; reaching P80 needs {contingency:.0f} more days of contingency.",
-              "confidence", "See the confidence curve"))
+              f"{share_of_futures(S['p_on_plan'], R['base'].milestone_finish().size)}; the largest cause is "
+              f"{L.plan_gap_phrase(largest['step'])} (+{largest['days']} days), and reaching P80 needs "
+              f"{contingency:.0f} more days of contingency.",
+              "confidence", "See why the plan misses"))
 
 # 2. The chain that drives first fire
 chains = R["chains"]
