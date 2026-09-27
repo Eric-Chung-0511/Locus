@@ -156,3 +156,23 @@ def test_tightest_item_skips_the_project_starters(model, make_bank):
     latest = A.latest_dates(base, START, base.milestone_finish().min(), 0.8)
     worst = A.tightest_item(latest, model)
     assert model.nodes[worst["id"]].condition != "handover"
+
+
+# ----------------------------------------------------------- commissioning order
+COMMISSIONING = ("Gate A: condenser vacuum", "Gate B: GT spin", "Gate C: first-fire items")
+
+
+@pytest.mark.parametrize("scen", [OFF, Scenario()])
+def test_commissioning_gates_follow_power_feeding(model, make_bank, scen):
+    """Every Gate A, B and C item starts after power feeding, in every simulated future."""
+    res = simulate(model, make_bank(), scen)
+    fed = finish_of(res, "GSU_POWER_FEED")
+    for nid, node in model.nodes.items():
+        if node.group in COMMISSIONING:
+            assert np.all(start_of(res, nid) >= fed), f"{nid} can start before power feeding"
+
+
+def test_every_group_is_listed_in_display_order(model):
+    assert {n.group for n in model.nodes.values()} <= set(model.groups)
+    order = [model.groups.index(g) for g in ("Gate 0: power receipt", *COMMISSIONING)]
+    assert order == sorted(order)

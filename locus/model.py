@@ -145,6 +145,7 @@ class Model:
     register: list[RegisterRow] = field(default_factory=list)
     risks: list[Risk] = field(default_factory=list)
     delay_sources: list[DelaySource] = field(default_factory=list)
+    groups: list[str] = field(default_factory=list)   # display order of the groups (plant file `groups`)
     jurisdiction: str = ""
     # Filled by compile()
     order: list[str] = field(default_factory=list)
@@ -170,6 +171,12 @@ class Model:
         """Validate the network and compute a topological order (Kahn's algorithm)."""
         if self.milestone not in self.nodes:
             raise ModelError(f"Milestone '{self.milestone}' is not a node")
+
+        if self.groups:
+            unlisted = sorted({n.group for n in self.nodes.values()} - set(self.groups))
+            if unlisted:
+                raise ModelError(f"Group(s) {', '.join(repr(g) for g in unlisted)} are used by items but not "
+                                 "listed under `groups` in the plant file")
 
         seen_short: dict[str, str] = {}
         for nid, node in self.nodes.items():
@@ -458,7 +465,8 @@ def load_model(plant_path: str | Path, rules_path: str | Path | None, with_risks
     if not milestone:
         raise ModelError("meta.milestone is required in the plant file")
 
-    model = Model(meta=meta, nodes={}, links=[], milestone=milestone)
+    model = Model(meta=meta, nodes={}, links=[], milestone=milestone,
+                  groups=[str(g) for g in plant.get("groups", []) or []])
 
     for raw in plant.get("externals", []) or []:
         model.add_node(_node_from_external(raw))

@@ -60,11 +60,11 @@ groups:
   - "Construction: transformer yard"
   - "Balance of plant"
   - "External inputs"
+  - "Reviews and permits"
   - "Gate 0: power receipt"
   - "Gate A: condenser vacuum"
   - "Gate B: GT spin"
   - "Gate C: first-fire items"
-  - "Reviews and permits"
 
 # -----------------------------------------------------------------------------
 # External inputs (interface nodes). Site handover, design, procurement and
@@ -434,6 +434,8 @@ links:
   # Gate B
   - {from: GT_INTAKE_INST, to: C_INTAKE_BOXUP, rel: FS, lag: 0, type: physical, why: "Box-up closes the finished intake"}
   - {from: C_INTAKE_BOXUP, to: C_GT_TURN, rel: FS, lag: 0, type: physical, why: "Any rotation draws air through the intake"}
+  - {from: MV_LV_BACKFEED, to: C_INTAKE_BOXUP, rel: FS, lag: 0, type: resource,
+     why: "Final box-up is the last check before any GT-side rotation, so it is done in commissioning, after power receipt; closing the intake months early invites dirt back in (author's commissioning flow)"}
   - {from: C_LUBE, to: C_GT_TURN, rel: FS, lag: 0, type: physical, why: "Bearings need an oil film before rotation"}
   - {from: TH_EI, to: C_SFC_DCS, rel: FS, lag: 0, type: physical, why: "Loop checks need terminated cables"}
   - {from: EEB_EI, to: C_SFC_DCS, rel: FS, lag: 0, type: physical, why: "SFC sits in the electrical bay"}
@@ -451,6 +453,7 @@ links:
   - {from: RACK_PIPING, to: C_FUEL_GAS, rel: FS, lag: 0, type: physical, why: "Gas line must be installed"}
   - {from: C_IA, to: C_FUEL_GAS, rel: FS, lag: 0, type: physical, why: "Gas valves need instrument air"}
   - {from: TH_EI, to: C_FIRE_FG, rel: FS, lag: 0, type: physical, why: "Detectors must be wired"}
+  - {from: MV_LV_BACKFEED, to: C_FIRE_FG, rel: FS, lag: 0, type: physical, why: "Fire pumps and F&G panels need plant power"}
   - {from: BOP_WATER, to: C_FIRE_FG, rel: FS, lag: 0, type: physical, why: "Fire water must be available"}
   - {from: GATE_A, to: FIRST_FIRE, rel: FS, lag: 0, type: physical, why: "Single shaft, no bypass stack: steam must go to the condenser"}
   - {from: GATE_B, to: FIRST_FIRE, rel: FS, lag: 0, type: physical, why: "Rotating train proven"}

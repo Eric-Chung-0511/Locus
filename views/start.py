@@ -53,7 +53,11 @@ for nid, (s_day, f_day) in plan_times.items():
     lo, hi = spans.get(group, (s_day, f_day))
     spans[group] = (min(lo, s_day), max(hi, f_day))
 phases = pd.DataFrame([{"group": g, "start": a, "finish": b} for g, (a, b) in spans.items()])
-phases = phases.sort_values(["start", "finish"]).reset_index(drop=True)
+# Rows follow the plant file's `groups` order (the logical sequence: handover, design,
+# construction, deliveries, reviews, then the commissioning gates 0, A, B, C).
+rank = {g: i for i, g in enumerate(model.groups)}
+phases["rank"] = phases["group"].map(lambda g: rank.get(g, len(rank)))
+phases = phases.sort_values(["rank", "start"]).reset_index(drop=True)
 to_date = lambda d: pd.Timestamp(day_to_date(start, d))
 fig = go.Figure()
 bars = phases[phases["finish"] > phases["start"]]
@@ -78,9 +82,11 @@ fig.update_xaxes(title=None, type="date", tickformat="%b %Y")
 styled(fig, 420)
 fig.update_layout(bargap=0.3, margin=dict(t=30))
 show(fig)
-st.caption("The plan's phases, from site handover to first fire. Diamonds are single events (for example "
-           "the site handover); bars span the first start to the last finish of each group. Design is "
-           "dated before piling because drawings must be issued before the work that needs them.")
+st.caption("The plan's phases, from site handover to first fire, in logical order. Diamonds are single events "
+           "(for example the site handover); bars span the first start to the last finish of each group. Design "
+           "is dated before piling because drawings must be issued before the work that needs them. Power receipt "
+           "starts early because its test reports are submitted months ahead; the commissioning gates A, B and C "
+           "all follow power feeding.")
 
 # ------------------------------------------------------------- 2. the plan
 st.subheader("2. What the plan says")
