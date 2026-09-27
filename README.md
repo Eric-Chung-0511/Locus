@@ -25,7 +25,7 @@ The reference model is a **generic single-shaft CCGT** (GT, generator and ST on 
 
 | Page | Question it answers |
 |---|---|
-| Start here | The story in five steps: what is simulated, what the plan says, what the simulated futures say, where the delay comes from (by source), and three what-ifs |
+| Start here | The story: what is simulated, what the plan says, what the simulated futures say, where the delay comes from (by source), what the analysis supports (five actions with evidence and trade-offs), and three what-ifs |
 | Guide | How to read every page, in English or Traditional Chinese (switch at the top) |
 | Summary | One finding per page, each one sentence and one number |
 | Milestone confidence | How likely is the plan date, why does it miss, and how much contingency is needed? |
@@ -85,7 +85,8 @@ The fifth is **common risks** (risk drivers): one event that slows many items at
 - **Headline finding** (default parameters, seed 42, 5,000 iterations): a four-week late start moves P50 first fire by 10 days without weather and 15 days with the station weather; a twelve-week late start by 51 and 66 days. Weather adds 5 and 15 days to those late starts here, without amplifying them beyond one-for-one.
 - **Forced-stoppage stress test**: every weather-sensitive activity loses a window of days (default 7) on top of the simulated weather; sweeping the window across the schedule shows when a lost week bites and when float absorbs it.
 - **Why the plan misses, by mechanism** (Milestone confidence): the single-number plan takes four best cases at once. Removing them one at a time on the same random numbers splits the gap exactly: deliveries at their average delay instead of the planned day (+23 days), durations at their average instead of the most likely (+13), merge bias, the simulated average of the latest converging path against a single pass of average paths (+15), and common risks (+33 on the average; on P80 they add about 48, because they also widen the spread), which take the plan to the simulated average (+84); the spread up to P80 adds 32, for 116 days of contingency. That is why the plan date is met in about 2 of 5,000 futures (default parameters, weather off, seed 42, 5,000 iterations).
-- **Where the delay comes from, by source** (Start here): each source is left out in turn, on the same random numbers, with its items exactly as planned: *if only this source went to plan, how much earlier would first fire be on average?* No order has to be chosen. With the same settings: equipment and materials +19 days, site construction +16, commissioning +4, permits and inspections +4, common risks +33, site handover and design 0 (on time by default); what the sources add together beyond their own bars, the combined effect (merge bias), is +8, for the same simulated average (+84).
+- **Where the delay comes from, by source** (Start here): each source is left out in turn, on the same random numbers, with its items exactly as planned: *if only this source went to plan, how much earlier would first fire be on average?* No order has to be chosen. With the same settings: equipment and materials +19 days, site construction +16, commissioning +5, permits and inspections +4, common risks +33, site handover and design 0 (on time by default); what the sources add together beyond their own bars, the combined effect (merge bias), is +7, for the same simulated average (+84). Each step is shown rounded to the nearest day and the merge-bias step takes the rounding remainder, so the steps add up exactly and the same raw value (common risks, for example) shows the same number in both splits.
+- **What the analysis supports** (Start here): five actions computed from the current run, each with its evidence and trade-off: commit to the P80 date; put mitigation on the largest source and the costliest common risk; track the items with the least float against the P80 date (a second backward pass with P80 as the target); use the proposals that win time; protect the site start.
 - **Criticality Index**: share of futures in which a node is on the driving path, traced back from the milestone through the link that actually set each start.
 - **Common Random Numbers**: every scenario reuses the same random draws, so differences come from the logic change only. Each node draws from its own stream, keyed by its id, so adding or removing a node never changes the draws of any other node.
 - **Sized weather horizon**: the simulation keeps only as many days of weather as the plan can reach (a pessimistic plan with every input at its 99.9th percentile, plus the late-start experiment, plus 25%), about 4.4 years for the reference plant with the default settings instead of 10. Weather draws are fixed per calendar day, so the horizon changes memory, never results. 5,000 iterations need about 70 MB.
@@ -135,6 +136,20 @@ Tests:
 pip install -r requirements-dev.txt
 pytest
 ```
+
+## Using it on a real P6 schedule
+
+Locus reads YAML, not XER, so a real schedule needs one conversion step. What maps directly:
+
+| Locus | From a P6 export (XER tables) |
+|---|---|
+| Activities: id, name, most-likely duration | `TASK`: `task_code`, `task_name`, remaining or original duration (hours converted to days with the calendar's hours per day) |
+| Links: FS / SS with lag | `TASKPRED`: `pred_type` `PR_FS` / `PR_SS`, `lag_hr_cnt`. FF and SF links need to be restated as FS or SS; Locus does not model them yet |
+| Groups | `PROJWBS` (WBS) or activity codes |
+| External inputs (deliveries, drawings, handover) | Milestones with constraints or no predecessors |
+| Weather-sensitive work | The calendar or an activity code that marks outdoor civil work and lifts |
+
+What P6 does not hold and a planner has to add, which is where the judgement is: the ranges (minimum, most likely, maximum) from a risk workshop or history, the common risks and what they touch, the **type** of every link that matters (physical, regulatory, means, contractual, resource, logistics), and for each breakable link the proposal as said on site and what breaking it costs. A converter for the first table is on the roadmap; the second part stays a planner's job.
 
 ## Known limitations
 

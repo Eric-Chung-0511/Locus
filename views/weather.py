@@ -21,7 +21,7 @@ else:
     worst = sweep.sort_values(["p80_shift_days", "mean_shift_days"], ascending=False).iloc[0]
     if worst["p80_shift_days"] >= 1:
         headline = (f"A {n}-day stoppage costs most when it starts around {worst['first_date']:%d %b %Y}: "
-                    f"P80 first fire moves {worst['p80_shift_days']:.0f} days.")
+                    f"P80 first fire moves {L.days_text(worst['p80_shift_days'])}.")
     else:
         headline = f"A {n}-day stoppage never moves P80 first fire by a whole day."
 header("Weather risk", headline, help_key="weather")
@@ -124,9 +124,9 @@ else:
     def column(entry: dict) -> list[str]:
         s, sp_ = entry["summary"], entry["spells"].set_index("kind")
         return [pct(sp_.loc["rain", "lost_share"]), pct(sp_.loc["rain", "share_with_run"]),
-                f"{sp_.loc['rain', 'median_longest_run']:.0f} days",
+                f"{L.days_text(sp_.loc['rain', 'median_longest_run'])}",
                 pct(sp_.loc["wind", "lost_share"]), pct(sp_.loc["wind", "share_with_run"]),
-                f"{sp_.loc['wind', 'median_longest_run']:.0f} days",
+                f"{L.days_text(sp_.loc['wind', 'median_longest_run'])}",
                 f"{s['p50_date']:%Y-%m-%d}", f"{s['p80_date']:%Y-%m-%d}", f"{s['p90_date']:%Y-%m-%d}"]
 
     used = " (used on every page)"

@@ -7,7 +7,7 @@ import streamlit as st
 from locus import analysis as A
 from locus import labels as L
 from locus.model import HARD_LINK_TYPES
-from views.shared import PAGES, how_to_read, pct, results, share_of_futures, source_note
+from views.shared import PAGES, how_to_read, pct, results, share_of_futures, status_line
 
 R = results()
 S, model = R["summary"], R["model"]
@@ -15,8 +15,7 @@ S, model = R["summary"], R["model"]
 st.title("Locus")
 st.subheader("Is the first-fire date trustworthy, what really drives it, "
              "and what can be done to win time back?")
-st.caption(model.meta.get("disclaimer", ""))
-source_note()
+status_line()
 how_to_read("summary")
 
 
@@ -29,13 +28,22 @@ def card(title: str, sentence: str, page_key: str, link_label: str) -> None:
 
 cards = []
 
+# What the analysis supports: the first two actions, worded as on Start here
+acts = R.get("actions") or []
+if acts:
+    titles = [L.supported_action_text(f)[0] for f in acts[:2]]
+    cards.append(("What does the analysis support?",
+                  f"{titles[0]}." + (f" {titles[1]}." if len(titles) > 1 else "")
+                  + f" {len(acts)} actions in all, each with its evidence and trade-off.",
+                  "start", "See every action"))
+
 # 0. The headline finding: a late start with and without weather (same random numbers)
 found = A.late_start_headline(R["both_modes"])
 if found:
     k, off_days, on_days = found
     cards.append((f"A {k}-week late start: without and with weather",
-                  f"Without weather, first fire (P50) moves {off_days:.0f} days; with recorded "
-                  f"weather it moves {on_days:.0f} days. "
+                  f"Without weather, first fire (P50) moves {L.days_text(off_days)}; with recorded "
+                  f"weather it moves {L.days_text(on_days)}. "
                   "The gap is what weather adds to a late start.",
                   "late_start", "See both curves"))
 
@@ -68,9 +76,9 @@ if not risk_table.empty:
     top = risk_table[~risk_table["combined"]].iloc[0]
     state = "" if R["risks"]["enabled"] else " (switched off on the other pages)"
     cards.append((f"What do common risks cost?{state}",
-                  f"Risks that slow many items at once add {total['p80_gain_if_removed']:.0f} days to P80 "
+                  f"Risks that slow many items at once add {L.days_text(total['p80_gain_if_removed'])} to P80 "
                   f"first fire; removing the costliest, {top['short_name'].lower()}, wins "
-                  f"{top['p80_gain_if_removed']:.0f} days at P80.",
+                  f"{L.days_text(top['p80_gain_if_removed'])} at P80.",
                   "risks", "See every common risk"))
 
 # 3. Best proposal versus all proposals combined
@@ -80,9 +88,9 @@ combined = rec[rec["combined"]]
 if not single.empty and not combined.empty:
     best = single.iloc[0]
     cards.append(("Can we win time back?",
-                  f"The best single proposal, \"{best['proposal']}\", gains {best['gain_p50_days']:.0f} days "
+                  f"The best single proposal, \"{best['proposal']}\", gains {L.days_text(best['gain_p50_days'])} "
                   f"at P50; all {len(single)} proposals together gain "
-                  f"{combined['gain_p50_days'].iloc[0]:.0f} days.",
+                  f"{L.days_text(combined['gain_p50_days'].iloc[0])}.",
                   "recovery", "See every proposal and its cost"))
 
 # 4. The external input or review that is already latest
@@ -90,11 +98,11 @@ lat = R["latest"]
 if not lat.empty:
     worst = A.tightest_item(lat, R["model"])
     if worst["margin_days"] < 0:
-        text = (f"{worst['short_name']} is already {-worst['margin_days']:.0f} days past the latest date "
+        text = (f"{worst['short_name']} is already {L.days_text(-worst['margin_days'])} past the latest date "
                 f"that protects the target in {R['confidence']:.0%} of futures.")
     else:
         text = (f"Every external input and review has margin; the tightest, {worst['short_name']}, "
-                f"has {worst['margin_days']:.0f} days.")
+                f"has {L.days_text(worst['margin_days'])}.")
     cards.append(("What is already too late?", text, "reviews", "See latest dates"))
 
 # 6. Forced weather stoppage
@@ -106,7 +114,7 @@ if not sweep.empty:
     tag = " (illustrative weather)" if R["illustrative"] else ""
     cards.append((f"What if bad weather stops the site?{tag}",
                   f"A {W['stoppage_days']}-day stoppage costs most from {worst['first_date']:%d %b %Y}, "
-                  f"moving P80 first fire {worst['p80_shift_days']:.0f} days; at {quiet} of "
+                  f"moving P80 first fire {L.days_text(worst['p80_shift_days'])}; at {quiet} of "
                   f"{len(sweep)} tested dates it moves P80 by less than a day.",
                   "weather", "See the weather stress test"))
 

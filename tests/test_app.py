@@ -20,10 +20,28 @@ def app():
 
 
 @pytest.mark.parametrize("key", list(PAGES))
-def test_every_page_renders(app, key):
+def test_every_page_renders_with_the_citation_at_the_bottom(app, key):
     app.switch_page(PAGES[key]).run()
     assert not app.exception, f"{key}: {app.exception}"
     assert app.title, f"{key}: no page title"
+    # The data licence asks for the citation wherever CWA-derived numbers can appear.
+    captions = [c.value for c in app.caption]
+    assert any("經作者加工計算" in c and "not a forecast" in c for c in captions), key
+
+
+def test_supported_actions_are_complete_and_well_worded(app):
+    from locus import labels as L
+    R = app.session_state["results"]
+    keys = [a["key"] for a in R["actions"]]
+    assert keys == ["commit", "focus", "watch", "proposals", "start"]
+    commit = R["actions"][0]
+    assert commit["p80_date"] == R["summary"]["p80_date"]
+    for fact in R["actions"]:
+        title, evidence, trade_off = L.supported_action_text(fact)
+        text = " ".join((title, evidence, trade_off))
+        assert title and evidence and trade_off
+        assert " 1 days" not in text and "the 1 proposals" not in text
+        assert "e&i" not in text                      # acronyms keep their case
 
 
 def test_start_here_is_the_landing_page():

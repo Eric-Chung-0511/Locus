@@ -21,11 +21,11 @@ if single.empty:
 best = single.iloc[0]
 all_gain = combined["gain_p50_days"].iloc[0]
 header("Win time back",
-       f"The best single proposal gains {best['gain_p50_days']:.0f} days at P50; "
+       f"The best single proposal gains {L.days_text(best['gain_p50_days'])} at P50; "
        f"all proposals together gain {all_gain:.0f}.", help_key="recovery")
 
 m1, m2, m3 = st.columns(3)
-m1.metric("All proposals together: P50 gain", f"{all_gain:.0f} days")
+m1.metric("All proposals together: P50 gain", f"{L.days_text(all_gain)}")
 m2.metric("All proposals together: chance of meeting the target", pts(combined["delta_p_on_target"].iloc[0]))
 m3.metric("Proposals with a measurable effect", f"{int(single['measurable'].sum())} of {len(single)}")
 

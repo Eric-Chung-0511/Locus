@@ -19,10 +19,10 @@ if lat.empty:
 else:
     worst = A.tightest_item(lat, model)
     if worst["margin_days"] < 0:
-        headline = (f"{worst['short_name']} is {-worst['margin_days']:.0f} days past its latest "
+        headline = (f"{worst['short_name']} is {L.days_text(-worst['margin_days'])} past its latest "
                     f"acceptable date; {int((lat['margin_days'] < 0).sum())} of {len(lat)} items are already late.")
     else:
-        headline = f"Every item has margin; the tightest, {worst['short_name']}, has {worst['margin_days']:.0f} days."
+        headline = f"Every item has margin; the tightest, {worst['short_name']}, has {L.days_text(worst['margin_days'])}."
     header("Reviews and latest dates", headline, help_key="reviews")
 
     lat["label"] = lat["short_name"].map(L.cap)
@@ -49,7 +49,7 @@ else:
     starters = lat[lat["id"].map(lambda nid: model.nodes[nid].condition == "handover")]
     if not starters.empty and starters["margin_days"].min() < 0:
         st.caption(f"The site handover and the start-of-works approval start every path, so their margin "
-                   f"({starters['margin_days'].min():.0f} days) is the whole plan's shortfall against the "
+                   f"({L.days_text(starters['margin_days'].min())}) is the whole plan's shortfall against the "
                    "target, not a late handover. With the target on the plan date, which few futures meet, "
                    "most items show red; set the target to a committed date (for example the P80 date) to "
                    "see the float each item really has.")

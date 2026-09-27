@@ -22,16 +22,16 @@ single = table[~table["combined"]]
 total = table[table["combined"]].iloc[0]
 top = single.iloc[0]
 if RK["enabled"]:
-    headline = (f"Common risks add {total['p80_gain_if_removed']:.0f} days to P80 first fire; "
+    headline = (f"Common risks add {L.days_text(total['p80_gain_if_removed'])} to P80 first fire; "
                 f"removing {top['short_name'].lower()} alone wins {top['p80_gain_if_removed']:.0f}.")
 else:
     headline = (f"Common risks are switched off (Advanced). With them on, P80 first fire moves "
-                f"{total['p80_gain_if_removed']:.0f} days later.")
+                f"{L.days_text(total['p80_gain_if_removed'])} later.")
 header("Common risks", headline, help_key="risks")
 
 k1, k2, k3 = st.columns(3)
-k1.metric("P80 added by all common risks", f"{total['p80_gain_if_removed']:.0f} days")
-k2.metric("P50 added by all common risks", f"{total['p50_gain_if_removed']:.0f} days")
+k1.metric("P80 added by all common risks", f"{L.days_text(total['p80_gain_if_removed'])}")
+k2.metric("P50 added by all common risks", f"{L.days_text(total['p50_gain_if_removed'])}")
 k3.metric("Chance of target, change without them", pts(total["delta_p_if_removed"]))
 
 # ------------------------------------------------------------------ chart
@@ -52,7 +52,7 @@ show(fig)
 st.caption("Blue: how much earlier P80 first fire gets if this risk is eliminated and the others remain: "
            "what mitigating it is worth. Light blue: what it adds when it is the only common risk. "
            "They differ because risks interact: a delay costs only while its path drives first fire. "
-           f"Neither column adds up to the total of {total['p80_gain_if_removed']:.0f} days.")
+           f"Neither column adds up to the total of {L.days_text(total['p80_gain_if_removed'])}.")
 
 # ------------------------------------------------------------------ table
 st.dataframe(pd.DataFrame({

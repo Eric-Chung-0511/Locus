@@ -165,8 +165,8 @@ def gap_figure(gap_days: pd.DataFrame, labels: list[str], texts: list[str], star
         hovertemplate="%{customdata}<extra></extra>"))
     fig.add_vline(x=0, line=dict(color=MUTED, dash="dot", width=1))
     fig.update_yaxes(autorange="reversed", title=None)
-    fig.update_xaxes(title=f"Days after the single-number plan ({day_to_date(start, plan_day):%d %b %Y})",
-                     rangemode="tozero")
+    # A short axis title: long ones are cut off on a phone; the plan date is in the bar labels.
+    fig.update_xaxes(title="Days after the plan date", rangemode="tozero")
     styled(fig, height)
     fig.update_layout(bargap=0.35, margin=dict(r=110))
     return fig
@@ -256,19 +256,28 @@ def how_to_read(key: str) -> None:
 
 def header(title: str, headline: str, help_key: str | None = None) -> None:
     """
-    Page title, then the answer first: one sentence with the key number, the
-    illustrative-weather note when it applies, and the page's help panel.
+    Page title, then the answer first: one sentence with the key number, one
+    short status line (simulation, weather mode) and the page's help panel.
+    The full disclaimer and the data citation are in the page footer.
     """
     st.title(title)
     st.subheader(headline)
-    source_note()
+    status_line()
     if help_key:
         how_to_read(help_key)
 
 
-def source_note() -> None:
+def status_line() -> None:
+    """One short line under the headline: a simulation, and whether weather changes the dates."""
+    R = results()
+    first = "Illustrative weather" if R["illustrative"] else "Simulation, not a forecast"
+    st.caption(f"{first} · {L.weather_status(R['weather']['on'])} · Sources at the bottom of the page")
+
+
+def page_footer() -> None:
     """
-    Small note on every page: the results are a simulation, not a forecast;
+    Small print at the bottom of every page (app.py draws it after the page):
+    the plant is fictional; the results are a simulation, not a forecast;
     whether weather is applied to the schedule or only shown as warnings; and
     the weather statistics come from CWA records processed by the author (the
     citation required by the data licence). No agency logo, no endorsement.
@@ -276,7 +285,9 @@ def source_note() -> None:
     R = results()
     W = R["weather"]
     table = W.get("table") or {}
-    parts = [ILLUSTRATIVE_NOTE if R["illustrative"] else (table.get("disclaimer") or DEFAULT_DISCLAIMER),
+    parts = [R["model"].meta.get("disclaimer", "").strip(),
+             ILLUSTRATIVE_NOTE if R["illustrative"] else (table.get("disclaimer") or DEFAULT_DISCLAIMER),
              L.weather_mode_text(W["on"], W.get("settings")),
              table.get("citation") or ""]
+    st.divider()
     st.caption(" ".join(x for x in parts if x))

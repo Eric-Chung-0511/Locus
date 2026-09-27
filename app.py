@@ -51,7 +51,7 @@ from locus.weather import (WeatherError, WeatherRule, daily_exceedance, daily_pe
                            daily_probabilities, date_to_day, day_to_date, has_spells,
                            has_thresholds, load_weather_table,
                            table_parameters, threshold_options)
-from views.shared import PAGES
+from views.shared import PAGES, page_footer
 
 logging.basicConfig(level=logging.INFO)
 ROOT = Path(__file__).parent
@@ -195,7 +195,7 @@ def run_all(plant_file: str, rules_file: str, weather_file: str, station: str,
                   "wind": {"warning": daily_exceedance(table, station, start, horizon, "wind", wind_warning_ms),
                            "stop": daily_exceedance(table, station, start, horizon, "wind", wind_stop_ms)}}
         weather["warnings"] = A.weather_warnings(base, start, exceed)
-    return {
+    out = {
         "model": model, "base": base, "plan_day": plan_day, "start": start,
         "target_day": target_day, "illustrative": illustrative, "confidence": confidence,
         "summary": A.milestone_summary(base, start, target_day, plan_day),
@@ -217,6 +217,14 @@ def run_all(plant_file: str, rules_file: str, weather_file: str, station: str,
                   "table": A.risk_contributions(full, bank, base if risks else simulate(full, bank, mode),
                                                 target_day)},
     }
+    # "What the analysis supports": latest dates against the P80 date (the date worth
+    # committing to), not against the target, which defaults to the unreachable plan date.
+    summary = out["summary"]
+    out["latest_p80"] = A.latest_dates(base, start, summary["p80_day"], confidence)
+    out["actions"] = A.supported_actions(model, summary, base.milestone_finish().size, out["sources"],
+                                         out["risks"]["table"], risks, out["latest_p80"], out["recovery"],
+                                         both)
+    return out
 
 
 @st.cache_resource(show_spinner=False)
@@ -361,10 +369,11 @@ with st.sidebar:
                                  "a supply-chain disruption): one event that slows many items at once. "
                                  "Off: every duration varies independently."
                                  if plant_risks else "This plant file defines no common risks.")
-    n_iter = st.select_slider("Iterations", options=[500, 1000, 2000, 5000], value=1000)
+    n_iter = st.select_slider("Iterations", options=[500, 1000, 2000, 5000], value=5000,
+                              help="Number of simulated futures. 5,000 (default) gives the published figures; "
+                                   "fewer runs faster.")
     run_pressed = st.button("Run", type="primary", width="stretch")
     notice = st.empty()
-    st.caption(" ".join(x for x in (weather_table.get("disclaimer"), weather_table.get("citation")) if x))
 
 # Explicit run: pages always show the results for run_params, which change only
 # when Run is pressed (or on the very first load, so the app is never empty).
@@ -391,3 +400,5 @@ except (ModelError, WeatherError, ValueError) as exc:
     st.stop()
 
 page.run()
+# Disclaimer and data citation on every page, at the bottom (the licence asks for the citation).
+page_footer()

@@ -12,7 +12,7 @@ Locus asks four questions that a planner or delivery PM hears in real meetings, 
 
 It does this by simulating the project many times (each run is one *iteration*, one possible future). Durations, deliveries, reviews and weather vary from one future to the next, following the ranges in the plant file. The answers are shares of those futures, not single dates.
 
-The reference plant is fictional: a generic single-shaft combined-cycle unit in Taiwan, from site handover to gas-turbine first fire. **Every result is a simulation that demonstrates the method; it is not a forecast.** Weather statistics come from ten years of daily records (2016–2025) of a CWA weather station in north-western Taiwan, named on Assumptions and sources, processed by the author (資料來源：交通部中央氣象署 CODiS 氣候觀測資料查詢服務，依政府資料開放授權條款第 1 版使用，經作者加工計算). The source and this note are shown in small print on every page.
+The reference plant is fictional: a generic single-shaft combined-cycle unit in Taiwan, from site handover to gas-turbine first fire. **Every result is a simulation that demonstrates the method; it is not a forecast.** Weather statistics come from ten years of daily records (2016–2025) of a CWA weather station in north-western Taiwan, named on Assumptions and sources, processed by the author (資料來源：交通部中央氣象署 CODiS 氣候觀測資料查詢服務，依政府資料開放授權條款第 1 版使用，經作者加工計算). A short status line under each page's headline says whether weather is applied; the full note and the data source are in small print at the bottom of every page.
 
 Start with the **Start here** page: what is simulated, what the plan says, what the simulated futures say, where the delay comes from, and three what-ifs. The **Summary** page then gives one finding per page, each with a link to the page that explains it. Every page also has a collapsed panel, **How to read this page**, with the explanation for that page. The **English / 中文** switch at the top of this Guide sets the language of the guide, those panels and the metric tooltips; the rest of the app stays in English.
 
@@ -37,7 +37,7 @@ Changing a setting does **not** recalculate. Press **Run** to update every page;
 | Weather parameters: Bad weather comes in spells | On: a lost day makes the next day more likely to be lost, using the mean spell lengths measured at the station. Off: every day is drawn independently. The share of days lost is the same either way. |
 | Advanced: Weather stress test | Length of the forced stoppage tested on the Weather risk page (default 7 days). |
 | Advanced: Common risks move many items together | On: apply the plant file's common risks, each of which can slow many items at once. Off: every duration varies independently. The Common risks page shows their cost either way. |
-| Iterations | Number of simulated futures. 1,000 is enough for everyday use; use 5,000 for figures you publish. |
+| Iterations | Number of simulated futures. The default, 5,000, gives the published figures; fewer runs faster. |
 
 <!-- section: start_here -->
 ## Start here
@@ -48,7 +48,10 @@ The story in five steps, for a first-time reader.
 2. **What the plan says.** The single-number date a typical schedule produces: most-likely durations, deliveries on their planned day, average weather, nothing unexpected.
 3. **What the simulated futures say.** The chance that the plan date holds, the date half of the futures reach (P50) and the date 80% reach (P80), with the curve behind them.
 4. **Where the delay comes from.** The gap between the plan and the simulated average, split by source: site handover and start approval, design, equipment and materials, permits and inspections, site construction, commissioning, weather (when applied) and common risks. Each bar answers one question: *if only this source went exactly to plan, how much earlier would first fire be on average?* It is measured by re-running the same futures with that source's items as planned (most-likely durations, planned arrivals, no tested delay). The bars add up to less than the whole gap, because late sources compound: first fire waits for whichever converging path is latest, so fixing one source lets another path take over. That remainder is the last bar, **Combined effect (merge bias)**. Then grey is the simulated average, light blue the spread up to P80, and dark the contingency needed. Site handover and design are assumed on time and show 0 until you set a delay under **Delays to test**.
-5. **What if.** Three comparisons that are already computed: the site start slips four weeks (for example a late handover or approval), weather is applied, and the costliest common risk is removed.
+5. **What the analysis supports.** Five actions that follow from the numbers, each with its evidence, a link to the page that shows it and its trade-off: commit to the P80 date rather than the plan date; put mitigation effort on the largest source of delay and the costliest common risk; track the items with the least float against the P80 date (latest dates are computed with the P80 date as the target), including how far design can slip and how late the site can be handed over; use the proposals that win time and skip those that only move risk; protect the site start. They are computed from the current run, so they change with the settings. They show the reasoning on an illustrative plant, not a decision for a real project.
+6. **What if.** Three comparisons that are already computed: the site start slips four weeks (for example a late handover or approval), weather is applied, and the costliest common risk is removed.
+
+The page ends with how the numbers are checked, a short note on who built the tool, and links to every page.
 
 The Milestone confidence page splits the same gap by mechanism (late deliveries, skewed durations, merge bias, common risks) for readers who know schedule risk analysis. Both splits end at the same simulated average and P80.
 
@@ -205,7 +208,7 @@ The result depends on the weather table and on the weather parameters. It is a s
 - **Not exactly the stoppage length:** days the weather had already taken cost nothing extra, and the workable days lost are made up later, in whatever weather comes then, so a single future can lose more or less than the stoppage itself.
 - **Futures delayed:** share of futures in which first fire moves at all.
 
-**Warnings, and the switch.** Every page says in small print whether weather is applied. With the switch off (the default), the tables below are **warnings only**: they show the weather each activity is likely to meet, and no date changes. With the switch on, the rain threshold and the wind stoppage threshold turn those days into lost days.
+**Warnings, and the switch.** Every page says under its headline whether weather is applied. With the switch off (the default), the tables below are **warnings only**: they show the weather each activity is likely to meet, and no date changes. With the switch on, the rain threshold and the wind stoppage threshold turn those days into lost days.
 
 **Rain and wind.** *Rain:* a day at or above the rain threshold (10 mm by default) is lost for rain-sensitive work, which in the reference plant is civil and outdoor work (piling, foundations, tunnels). Indoor work carries on once the building envelope is closed, so it is not rain-sensitive; on a real site that is usually, not always, true.
 

@@ -119,6 +119,7 @@ class DelaySource:
     label: str
     what: str
     applies_to: dict
+    action: str = ""
     members: list[str] = field(default_factory=list)
 
 
@@ -146,6 +147,7 @@ class Model:
     risks: list[Risk] = field(default_factory=list)
     delay_sources: list[DelaySource] = field(default_factory=list)
     groups: list[str] = field(default_factory=list)   # display order of the groups (plant file `groups`)
+    timeline: list[dict] = field(default_factory=list)  # plain-language phases: {label, groups} (plant file `timeline`)
     jurisdiction: str = ""
     # Filled by compile()
     order: list[str] = field(default_factory=list)
@@ -177,6 +179,16 @@ class Model:
             if unlisted:
                 raise ModelError(f"Group(s) {', '.join(repr(g) for g in unlisted)} are used by items but not "
                                  "listed under `groups` in the plant file")
+
+        for i, phase in enumerate(self.timeline):
+            label, groups = phase.get("label"), phase.get("groups")
+            if not label or len(str(label)) > SOURCE_LABEL_MAX:
+                raise ModelError(f"timeline entry {i + 1}: label is required, at most {SOURCE_LABEL_MAX} characters")
+            if not isinstance(groups, list) or not groups:
+                raise ModelError(f"timeline '{label}': groups must be a non-empty list")
+            unknown = [g for g in groups if g not in self.groups]
+            if unknown:
+                raise ModelError(f"timeline '{label}': group(s) {unknown} are not listed under `groups`")
 
         seen_short: dict[str, str] = {}
         for nid, node in self.nodes.items():
@@ -449,7 +461,7 @@ def _source_from_raw(raw: dict) -> DelaySource:
     if not key:
         raise ModelError(f"Delay source without key: {raw}")
     return DelaySource(key=str(key), label=str(raw.get("label", "")), what=str(raw.get("what", "")),
-                       applies_to=dict(raw.get("applies_to") or {}))
+                       applies_to=dict(raw.get("applies_to") or {}), action=str(raw.get("action", "")))
 
 
 def load_model(plant_path: str | Path, rules_path: str | Path | None, with_risks: bool = True) -> Model:
@@ -466,7 +478,8 @@ def load_model(plant_path: str | Path, rules_path: str | Path | None, with_risks
         raise ModelError("meta.milestone is required in the plant file")
 
     model = Model(meta=meta, nodes={}, links=[], milestone=milestone,
-                  groups=[str(g) for g in plant.get("groups", []) or []])
+                  groups=[str(g) for g in plant.get("groups", []) or []],
+                  timeline=[dict(t) for t in plant.get("timeline", []) or []])
 
     for raw in plant.get("externals", []) or []:
         model.add_node(_node_from_external(raw))

@@ -105,3 +105,13 @@ def test_plan_gap_wording_is_complete_and_short():
             assert L.plan_gap_text(key, weather)
     for key in A.GAP_STEPS:
         assert L.PLAN_GAP_STEPS[key]["action"] and L.plan_gap_phrase(key)
+
+
+@pytest.mark.parametrize("values,total", [
+    ([23.0, 13.2, 15.4, 32.7], 84), ([0.0, 0.0, 19.4, 3.6, 4.5, 15.3, 32.7, 8.3], 84),
+    ([1.5, 1.5, 1.5, 1.5], 6), ([10.2, -3.4, 5.9], 13), ([0.0], 0),
+])
+def test_whole_days_add_up_and_stay_next_to_each_value(values, total):
+    shown = A.whole_days(values, total)
+    assert sum(shown) == total
+    assert all(np.floor(v) <= d <= np.ceil(v) for v, d in zip(values, shown))

@@ -138,6 +138,7 @@ def test_source_split_adds_up_and_matches_the_mechanism_split(model, make_bank, 
     shown_s = A.plan_gap_days(by_source).set_index("step")["days"]
     shown_m = A.plan_gap_days(by_mechanism).set_index("step")["days"]
     assert shown_s["mean"] == shown_m["mean"] and shown_s["p80"] == shown_m["p80"]
+    assert shown_s["risks"] == shown_m["risks"]                     # same raw value, same number
     steps = by_source["steps"].set_index("step")["days"]
     assert steps["handover"] == 0 and steps["design"] == 0          # on time by default
     assert ("weather" in steps.index) == (not scen.ignore_weather)

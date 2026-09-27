@@ -5,6 +5,7 @@ Every function answers one question a planner or delivery PM gets asked:
     milestone_summary   -> "How likely is the date?"
     plan_gap            -> "Why does the single-number plan miss, and by how much for each reason?"
     source_gap          -> the same gap by where the delay comes from (design, equipment, permits...)
+    supported_actions   -> "What does the analysis support doing?" (five actions with their evidence)
     criticality_table   -> "What actually drives it?"
     driver_chains       -> the same, with items that are always critical together merged
     latest_dates        -> "How late can this delivery / submission be?"
@@ -206,6 +207,21 @@ def source_gap(model: Model, bank: RandomBank, daily_p: dict[str, np.ndarray],
     }
 
 
+def whole_days(values: list[float], total: int) -> list[int]:
+    """
+    Round values to whole days that add up exactly to `total` (largest remainder
+    method): take the floor of each, then give the missing days one at a time to
+    the values with the largest fractional parts. Each value lands on its floor
+    or its ceiling, so the same raw value shows the same way in every chart.
+    """
+    floors = [int(np.floor(v)) for v in values]
+    missing = int(total) - sum(floors)
+    order = sorted(range(len(values)), key=lambda i: values[i] - floors[i], reverse=missing > 0)
+    for i in order[:abs(missing)]:
+        floors[i] += 1 if missing > 0 else -1
+    return floors
+
+
 def plan_gap_days(gap: dict) -> pd.DataFrame:
     """
     The plan gap in whole days, ready to show, with the reference bars added:
@@ -213,31 +229,40 @@ def plan_gap_days(gap: dict) -> pd.DataFrame:
     P80) and "p80" (plan to P80). Columns: step, days, from_offset, to_offset,
     offsets counted from the plan day.
 
-    Rounding each step on its own could make the steps add up to one day more or
-    less than the total shown next to them. The cumulative levels are rounded
-    instead and each step is the difference of two rounded levels, so the
-    displayed steps always add up to the displayed totals.
+    Every step is rounded to the nearest day, and the merge-bias step (the
+    residual step: "combined" in the split by source, "merge" in the split by
+    mechanism) takes whatever rounding leaves, so the steps add up exactly to
+    the rounded simulated mean and a step with the same raw value, such as
+    common risks in both splits, always shows the same number. Without such a
+    step the largest remainder method is used (whole_days).
     """
     plan = gap["plan_day"]
     steps = gap["steps"]
     if "show" in steps:
         steps = steps[steps["show"]]
+    mean = int(round(gap["mean_day"] - plan))
+    raw = list(steps["days"])
+    keys = list(steps["step"])
+    absorber = next((k for k in ("combined", "merge") if k in keys), None)
+    if absorber is None:
+        shown = whole_days(raw, mean)
+    else:
+        shown = [int(round(v)) for v in raw]
+        j = keys.index(absorber)
+        shown[j] = mean - (sum(shown) - shown[j])
     rows, prev = [], 0
-    for _, r in steps.iterrows():
-        level = int(round(r["to_day"] - plan))
-        row = {"step": r["step"], "days": level - prev, "from_offset": prev, "to_offset": level}
+    for (_, r), d in zip(steps.iterrows(), shown):
+        row = {"step": r["step"], "days": d, "from_offset": prev, "to_offset": prev + d}
         for key in ("label", "what"):          # set by source_gap for the plant's own sources
             if key in steps and isinstance(r.get(key), str):
                 row[key] = r[key]
         rows.append(row)
-        prev = level
-    mean = prev
+        prev += d
     p80 = int(round(gap["p80_day"] - plan))
     rows += [{"step": "mean", "days": mean, "from_offset": 0, "to_offset": mean},
              {"step": "spread", "days": p80 - mean, "from_offset": mean, "to_offset": p80},
              {"step": "p80", "days": p80, "from_offset": 0, "to_offset": p80}]
     return pd.DataFrame(rows)
-
 
 # ---------------------------------------------------------------- criticality
 def criticality_table(res: SimResult, start: date) -> pd.DataFrame:
@@ -361,6 +386,82 @@ def latest_dates(res: SimResult, start: date, target_day: float, confidence: flo
 
 
 # ------------------------------------------------------------ recovery options
+def supported_actions(model: Model, summary: dict, n_futures: int, source_split: dict | None,
+                      risk_table: pd.DataFrame, risks_enabled: bool, latest_at_p80: pd.DataFrame,
+                      recovery: pd.DataFrame, both_modes: dict) -> list[dict]:
+    """
+    The facts behind "What the analysis supports", one dict per action, in the
+    order they are shown. Every number comes from the current run, so the
+    actions change with the settings (labels.supported_action_text words them):
+
+        commit    promise the P80 date, not the plan date (how often the plan holds)
+        focus     the largest source of delay and the costliest common risk
+        watch     the items with the least float against the P80 date (latest
+                  dates computed with the P80 date as the target), how far design
+                  can slip, and how late the site can be handed over
+        proposals which proposals win time, and one that only moves risk
+        start     what a four-week late start costs without and with weather
+
+    An action is left out when its facts are missing (for example no common
+    risks, or no proposal with a measurable effect).
+    """
+    out: list[dict] = [{
+        "key": "commit", "page": "confidence",
+        "plan_date": summary["plan_date"], "p80_date": summary["p80_date"],
+        "contingency": int(round(summary["p80_day"] - summary["plan_day"])),
+        "hits": int(round(summary["p_on_plan"] * n_futures)), "n": int(n_futures),
+    }]
+
+    focus: dict = {"key": "focus", "page": "start"}
+    if source_split is not None:
+        shown = plan_gap_days(source_split)
+        own = shown[shown["step"].isin(source_split["sources"]) & (shown["days"] > 0)]
+        if not own.empty:
+            top = own.sort_values("days", ascending=False).iloc[0]
+            src = next(s for s in model.delay_sources if s.key == top["step"])
+            focus.update(source=src.label, source_days=int(top["days"]), source_action=src.action)
+    single = risk_table[~risk_table["combined"]] if "combined" in risk_table else risk_table
+    if risks_enabled and not single.empty:
+        risk = single.sort_values("p80_gain_if_removed", ascending=False).iloc[0]
+        focus.update(risk=str(risk["short_name"]), risk_gain=int(round(risk["p80_gain_if_removed"])),
+                     risk_probability=float(risk["probability"]))
+    if len(focus) > 2:
+        out.append(focus)
+
+    if not latest_at_p80.empty:
+        cond = latest_at_p80["id"].map(lambda nid: model.nodes[nid].condition)
+        others = latest_at_p80[cond != "handover"].sort_values("margin_days")
+        design = latest_at_p80[cond == "design"]
+        handover = latest_at_p80[cond == "handover"]
+        out.append({
+            "key": "watch", "page": "reviews",
+            "tightest": [(r["short_name"], int(r["margin_days"])) for _, r in others.head(3).iterrows()],
+            "design_float": int(design["margin_days"].min()) if not design.empty else None,
+            "handover_float": int(handover["margin_days"].min()) if not handover.empty else None,
+        })
+
+    rec = recovery[~recovery["combined"]]
+    useful = rec[rec["measurable"]].sort_values("gain_p50_days", ascending=False)
+    if not useful.empty:
+        idle = rec[~rec["measurable"]].sort_values("on_driving_path")
+        together = recovery[recovery["combined"]]
+        out.append({
+            "key": "proposals", "page": "recovery",
+            "useful": [(r["proposal"], float(r["gain_p50_days"])) for _, r in useful.iterrows()],
+            "together": float(together["gain_p50_days"].iloc[0]) if not together.empty else None,
+            "n_tested": int(len(rec)),
+            "idle": (idle.iloc[0]["proposal"], float(idle.iloc[0]["on_driving_path"]),
+                     str(idle.iloc[0]["cost_or_risk"])) if not idle.empty else None,
+        })
+
+    late = late_start_headline(both_modes)
+    if late:
+        weeks, off_days, on_days = late
+        out.append({"key": "start", "page": "late_start", "weeks": weeks,
+                    "off_days": int(round(off_days)), "on_days": int(round(on_days))})
+    return out
+
+
 def tightest_item(latest: pd.DataFrame, model: Model) -> pd.Series | None:
     """
     The external input or review with the least margin, for headlines. Items

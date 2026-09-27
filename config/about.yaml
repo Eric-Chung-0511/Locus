@@ -1,0 +1,11 @@
+# Who built Locus, shown at the bottom of the Start here page.
+# Edit freely; leave a link empty to hide it.
+name: "Eric Chung"
+role: "Project controls engineer, EPC, large combined-cycle power plants"
+summary: >
+  Planning and scheduling in Primavera P6, schedule risk analysis (Monte Carlo QRA), site progress
+  tracking, discipline weighting and decision-ready reporting, with hands-on involvement in execution.
+  Locus turns questions asked in real schedule meetings into numbers that trace back to their sources.
+links:
+  GitHub: "https://github.com/Eric-Chung-0511/Locus"
+  LinkedIn: ""

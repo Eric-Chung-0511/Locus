@@ -66,6 +66,19 @@ groups:
   - "Gate B: GT spin"
   - "Gate C: first-fire items"
 
+# Start here timeline: plain-language phases, in order, each drawn as one bar
+# from the first start to the last finish of its groups (label at most 40 characters).
+timeline:
+  - {label: "Site handover and design", groups: ["Site handover", "Design"]}
+  - {label: "Steel fabrication", groups: ["Fabrication"]}
+  - {label: "Turbine hall: piling to E&I", groups: ["Construction: Turbine Hall"]}
+  - {label: "Heat recovery steam generator", groups: ["Construction: HRSG"]}
+  - {label: "Tunnels, yards and utilities", groups: ["Construction: linear assets", "Construction: transformer yard", "Balance of plant"]}
+  - {label: "Main equipment arrives", groups: ["External inputs"]}
+  - {label: "Inspections and permits", groups: ["Reviews and permits"]}
+  - {label: "Power receipt from the grid", groups: ["Gate 0: power receipt"]}
+  - {label: "Commissioning to first fire", groups: ["Gate A: condenser vacuum", "Gate B: GT spin", "Gate C: first-fire items"]}
+
 # -----------------------------------------------------------------------------
 # External inputs (interface nodes). Site handover, design, procurement and
 # transport are not expanded; each package is an arrival event with a delay
@@ -479,32 +492,39 @@ links:
 # -----------------------------------------------------------------------------
 # Delay sources: how the "where does the delay come from" chart groups items.
 # Same selectors as common risks; an item belongs to the FIRST source it
-# matches, and the last source (no selectors) takes every item left.
+# matches, and the last source (no selectors) takes every item left. `action` is
+# what a planner can do about the source (shown on Start here).
 # -----------------------------------------------------------------------------
 delay_sources:
   - key: handover
     label: "Site handover and start approval"
     what: "The owner hands over the site (notice to proceed) and the start-of-works application is approved before piling. Assumed on time; set a delay under Delays to test."
+    action: "Agree the handover and approval dates with the owner and the authority early, and track them from contract award."
     applies_to: {conditions: [handover]}
   - key: design
     label: "Design"
     what: "Drawings issued for construction (piling, foundations, steel), the overseas maker's certified foundation drawings and the fabricator's steel shop drawings. Assumed on time, because design is followed closely up to IFC; set a delay under Delays to test."
+    action: "Keep chasing design to IFC, freeze interfaces early, and start the steel shop drawings as soon as IFC is out."
     applies_to: {conditions: [design]}
   - key: supply
     label: "Equipment and materials"
     what: "Main equipment from overseas makers, the step-up transformer, the grid-side switchyard and fabricated steel. Delays start at zero: they can arrive late, never early."
+    action: "Order long-lead equipment early, expedite the packages that drive the date, and hold float in front of their installation."
     applies_to: {conditions: [supply]}
   - key: permits
     label: "Permits and inspections"
     what: "Reviews, inspections and grid-connection steps set by the rule pack. Waiting times have a long right tail: most are quick, a few drag on."
+    action: "Prepare applications while the work is still being installed, so reviews start the day the work is ready."
     applies_to: {conditions: [regulatory]}
   - key: commissioning
     label: "Commissioning"
     what: "Power receipt and system commissioning up to first fire. Durations skew late: problems found during tests take longer to fix than the time saved when tests go well."
+    action: "Hand systems over for commissioning in the order the gates need them, with vendor specialists booked in advance."
     applies_to: {groups: ["Gate 0: power receipt", "Gate A: condenser vacuum", "Gate B: GT spin", "Gate C: first-fire items"]}
   - key: site
     label: "Site construction"
     what: "Piling, foundations, buildings, steel erection, tunnels and balance of plant. Durations skew late: overruns can be larger than savings."
+    action: "Protect site productivity: crew planning, supervision and rework control on the areas that feed commissioning first."
 
 risks:
   - id: SITE_PRODUCTIVITY

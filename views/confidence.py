@@ -72,7 +72,7 @@ st.subheader("Why the plan misses")
 st.write(
     f"The single-number plan takes four best cases at once. Each bar removes one of them and shows how far "
     f"first fire moves; together they take the plan to the simulated average (+{mean_offset} days), and the "
-    f"spread of outcomes adds the rest of the contingency up to P80 (+{contingency:.0f} days).")
+    f"spread of outcomes adds the rest of the contingency up to P80 (+{L.days_text(contingency)}).")
 
 order = list(gap_days["step"])
 labels = [L.plan_gap_label(k, weather_applied) for k in order]

@@ -261,6 +261,12 @@ def risk_impact_text(effect: str, spec: Mapping[str, Any] | None) -> str:
     return str(kind)
 
 
+def weather_status(on: bool) -> str:
+    """A few words for the top of every page: is weather applied to the dates?"""
+    return ("Weather: applied to the schedule" if on
+            else "Weather: shown as warnings only, not applied to the dates")
+
+
 def weather_mode_text(on: bool, settings: Mapping[str, Any] | None) -> str:
     """One sentence: is weather applied to the schedule, and under which rule."""
     if settings is None:
@@ -295,3 +301,75 @@ def file_label(filename: str, meta_name: str | None = None) -> str:
         if stem.startswith(prefix):
             stem = stem[len(prefix):]
     return stem.replace("_", " ").capitalize()
+
+
+# ------------------------------------------------------ what the analysis supports
+def days_text(n: float) -> str:
+    """'1 day', '3 days'."""
+    k = int(round(n))
+    return f"{k} day" if k == 1 else f"{k} days"
+
+
+def _lower_first(text: str) -> str:
+    """Lower-case the first letter for use inside a sentence, unless it starts an acronym (GT, E&I)."""
+    text = text.strip().rstrip(".")
+    if len(text) > 1 and text[0].isupper() and not (text[1].isupper() or text[1] in "&/"):
+        return text[0].lower() + text[1:]
+    return text
+
+
+def supported_action_text(fact: dict) -> tuple[str, str, str]:
+    """
+    Title, evidence and trade-off for one action from analysis.supported_actions,
+    in a neutral voice: what the analysis supports, not what someone decided.
+    """
+    k = fact["key"]
+    if k == "commit":
+        hits = "none" if fact["hits"] == 0 else f"{fact['hits']:,}"
+        return (f"Commit to {fact['p80_date']:%d %b %Y} (P80), not {fact['plan_date']:%d %b %Y}",
+                f"The single-number plan holds in {hits} of {fact['n']:,} simulated futures; the P80 date holds in "
+                f"four out of five. That is {days_text(fact['contingency'])} of contingency.",
+                "The committed date is later than the plan, so the owner needs to hear why early.")
+    if k == "focus":
+        parts = []
+        if "source" in fact:
+            parts.append(f"{fact['source']} is the largest source of delay (+{days_text(fact['source_days'])} on "
+                         f"average). {fact['source_action']}")
+        if "risk" in fact:
+            parts.append(f"Removing the costliest common risk, {_lower_first(fact['risk'])} (it occurs in "
+                         f"{fact['risk_probability']:.0%} of futures), brings P80 {days_text(fact['risk_gain'])} earlier.")
+        return ("Put mitigation effort where the days are", " ".join(parts),
+                "Mitigation costs money (earlier orders, expediting, supervision); the days above say what it is worth.")
+    if k == "watch":
+        items = ", ".join(f"{name} ({m:+d} days)" for name, m in fact["tightest"])
+        extra = []
+        if fact.get("design_float") is not None:
+            extra.append(f"design can slip up to {days_text(fact['design_float'])}")
+        if fact.get("handover_float") is not None:
+            extra.append(f"the site can be handed over up to {days_text(fact['handover_float'])} late")
+        joined = " and ".join(extra)
+        tail = (" " + joined[0].upper() + joined[1:] + " without putting that date at risk.") if extra else ""
+        return ("Track the items with the least float every week",
+                f"Measured against the P80 date, the tightest are {items}.{tail}",
+                "Float is only real while these dates hold; a slip here uses the contingency first.")
+    if k == "proposals":
+        n_useful = len(fact["useful"])
+        useful = "; ".join(f"\u201c{p}\u201d wins {days_text(g)}" for p, g in fact["useful"])
+        together = (f" All {fact['n_tested']} together win {days_text(fact['together'])}."
+                    if fact.get("together") else "")
+        idle = ""
+        if fact.get("idle"):
+            name, share, cost = fact["idle"]
+            idle = (f" Skip proposals such as \u201c{name}\u201d: that link drives first fire in {share:.0%} of "
+                    f"futures, so its cost ({_lower_first(cost)}) buys no time.")
+        title = ("Use the one proposal that wins time, skip the rest" if n_useful == 1
+                 else f"Use the {n_useful} proposals that win time, skip the rest")
+        return (title, f"At P50: {useful}.{together}{idle}",
+                "Each proposal moves some risk elsewhere; its cost is listed on Win time back.")
+    if k == "start":
+        return ("Protect the site start",
+                f"Starting {fact['weeks']} weeks late moves first fire (P50) by {days_text(fact['off_days'])}, or "
+                f"{days_text(fact['on_days'])} with recorded weather, because the work is pushed into a worse season.",
+                "The handover and the start-of-works approval sit with the owner and the authority; "
+                "agree them early.")
+    raise ValueError(f"Unknown action '{k}'")
