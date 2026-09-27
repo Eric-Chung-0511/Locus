@@ -2,7 +2,7 @@
 
 **Where does the milestone land across thousands of possible futures, what really drives it, and which links can be broken to win time back?**
 
-**Live app:** https://csj9sptuhxkjew8emofbrd.streamlit.app
+**Live app:** https://8begpzao4qkmdjthwx2f4r.streamlit.app
 
 *Why "Locus":* in geometry a locus is the set of all points that satisfy a condition; here it is the set of dates on which first fire can land once everything it depends on is true.
 
