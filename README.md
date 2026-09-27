@@ -12,11 +12,12 @@ Most schedule tools answer "what is the status?". Locus answers the questions a 
 - *"What is driving it?"* → Criticality Index across thousands of simulated futures
 - *"What if productivity is poor across the whole site?"* → common risks that move many items together, and what removing each one is worth
 - *"Why don't we just start X early to win time?"* → the gain, how often that link really drives the milestone, and what breaking it costs
-- *"How late can the transformer arrive / the permit be submitted?"* → latest acceptable dates, back-calculated from the milestone
+- *"Where does the delay come from: design, equipment, permits or the site?"* → the gap between the plan and the simulated futures, split by source
+- *"How late can the transformer arrive / the drawings be issued / the site be handed over?"* → latest acceptable dates, back-calculated from the milestone
 - *"Piling starts a month late: how much later is first fire, and how much of that is weather?"* → the same late start simulated without and with ten years of station weather; the gap is what weather adds
 - *"What if the plum rain stops the site for a week?"* → what a lost week costs at each point of the schedule, with weather that comes in spells
 
-The reference model is a **generic single-shaft CCGT** (GT, generator and ST on one shaft; HRSG without bypass stack), one unit, utility-owned, from piling to **GT first fire**.
+The reference model is a **generic single-shaft CCGT** (GT, generator and ST on one shaft; HRSG without bypass stack), one unit, in Taiwan, utility-owned, main equipment from overseas makers, from site handover and the start-of-works approval to **GT first fire**.
 
 > The reference plant is fictional. It is built from general engineering practice and public sources and does not describe any real project.
 
@@ -24,18 +25,21 @@ The reference model is a **generic single-shaft CCGT** (GT, generator and ST on 
 
 | Page | Question it answers |
 |---|---|
+| Start here | The story in five steps: what is simulated, what the plan says, what the simulated futures say, where the delay comes from (by source), and three what-ifs |
 | Guide | How to read every page, in English or Traditional Chinese (switch at the top) |
 | Summary | One finding per page, each one sentence and one number |
 | Milestone confidence | How likely is the plan date, why does it miss, and how much contingency is needed? |
 | What drives the date | Which items drive the milestone, and how often? Items that are always critical together are merged into one row; click a bar for its predecessors |
 | Common risks | Which risk that slows many items at once costs the most, and what is removing it worth? |
 | Win time back | Which proposals gain time, how often their link really drives, and what they cost |
-| Reviews and latest dates | Which reviews apply, and how late can deliveries and submissions be? |
+| Reviews and latest dates | Which reviews apply, and how late can deliveries, drawings, the site handover and submissions be? |
 | Late-start cost | How far does a late start move first fire without weather and with weather? The gap is the headline finding |
 | Weather risk | Which activities face strong wind or heavy rain in their window (warnings), what does a forced stoppage cost at each date, and does it matter that bad weather comes in spells? |
 | Assumptions and sources | Every input with its source grade |
 
-Settings live in the sidebar. Changing a setting does not recalculate; press **Run** to update every page.
+Settings live in the sidebar, in the order a first-time reader needs them; the rest is collapsed. Changing a setting does not recalculate; press **Run** to update every page.
+
+**Delays to test.** Site handover (notice to proceed), the start-of-works approval, design deliverables (piling, foundation and steel IFC, the overseas maker's certified foundation drawings, the steel shop drawings) and steel fabrication are on time by default: design is followed closely up to IFC, and a utility owner rarely hands over late. Practice differs between companies, so each one takes a delay in days, alone or together. The plan keeps its dates; the simulation carries the delays, and every page shows what they cost.
 
 **Weather is a switch.** *Apply weather to the schedule* is **off by default**: weather is then shown as warnings (possible impacts) and no date changes. Switch it on to let rain and wind stop weather-sensitive work. The thresholds and other weather settings sit in the collapsed *Weather parameters* panel; each one shows its source and verification status, also listed on the Assumptions and sources page.
 
@@ -68,25 +72,26 @@ Breakable links carry a `relax` entry: the alternative logic, the **proposal** a
 
 ### Five kinds of uncertainty
 
-Weather (rain for civil work, wind for heavy lifts, in multi-day spells), productivity, supply (external arrivals), and **reviews** (inspections and permits: long-tailed, and adding people does not make them faster). A rule engine reads asset attributes (e.g. a fixed crane of 3 t or more) and inserts the applicable reviews automatically, each with its legal basis.
+Weather (rain for civil work, wind for heavy lifts, in multi-day spells), productivity, supply (external arrivals, including design deliverables and the site handover), and **reviews** (inspections and permits: long-tailed, and adding people does not make them faster). A rule engine reads asset attributes (e.g. a fixed crane of 3 t or more) and inserts the applicable reviews automatically, each with its legal basis.
 
 The fifth is **common risks** (risk drivers): one event that slows many items at once, such as site-wide low productivity or a supply-chain disruption. Each has a chance of occurring, a size (a factor on durations or days added), and the items it applies to. In one simulated future every affected item gets the same size, so their delays move together instead of cancelling out.
 
 ## Method
 
-- **Monte Carlo, vectorised across iterations** (NumPy). 1,000 iterations of the 66-node network run in about 0.01 s.
+- **Monte Carlo, vectorised across iterations** (NumPy). 1,000 iterations of the 74-node network run in under 0.01 s.
 - **Calendar-aware weather** (when weather is applied): weather-sensitive work consumes *workable* days; a day is lost with the probability for its calendar month.
 - **Weather spells**: bad weather comes in runs. A two-state Markov chain makes a lost day more likely after a lost day, with the monthly **mean spell length** as its parameter and the transition out of workable days tuned so the long-run share of lost days stays exactly the table value. Spells regroup lost days; they do not add any. With independent days a lost week is almost impossible (0.25⁷ ≈ 1 in 16,000); with the Xinwu record, a week or more of consecutive rain days appears in about one simulated future in ten.
 - **Weather switch**: weather is a scenario flag. Off (the default), weather is shown as warnings only and no date changes; on, rain and wind stop weather-sensitive work under the weather parameters. Both modes use the same random numbers, so the difference is weather alone. Without weather the network is max-plus with fixed durations, so a late start can never pass through more than one-for-one (tested); only weather can amplify it.
-- **Headline finding** (default parameters, seed 42, 5,000 iterations): a four-week late start moves P50 first fire by 9 days without weather and 15 days with the Xinwu weather; a twelve-week late start by 50 and 65 days. Weather adds 6 and 15 days to those late starts here, without amplifying them beyond one-for-one.
+- **Headline finding** (default parameters, seed 42, 5,000 iterations): a four-week late start moves P50 first fire by 10 days without weather and 15 days with the station weather; a twelve-week late start by 51 and 66 days. Weather adds 5 and 15 days to those late starts here, without amplifying them beyond one-for-one.
 - **Forced-stoppage stress test**: every weather-sensitive activity loses a window of days (default 7) on top of the simulated weather; sweeping the window across the schedule shows when a lost week bites and when float absorbs it.
-- **Why the plan misses**: the single-number plan takes four best cases at once. Removing them one at a time on the same random numbers splits the gap exactly: deliveries at their average delay instead of the planned day (+23 days), durations at their average instead of the most likely (+13), merge bias, the simulated average of the latest converging path against a single pass of average paths (+16), and common risks (+34 on the average; on P80 they add about 48, because they also widen the spread), which take the plan to the simulated average (+86); the spread up to P80 adds 30, for 116 days of contingency. That is why the plan date is met in about 2 of 5,000 futures (default parameters, weather off, seed 42, 5,000 iterations).
+- **Why the plan misses, by mechanism** (Milestone confidence): the single-number plan takes four best cases at once. Removing them one at a time on the same random numbers splits the gap exactly: deliveries at their average delay instead of the planned day (+23 days), durations at their average instead of the most likely (+13), merge bias, the simulated average of the latest converging path against a single pass of average paths (+15), and common risks (+33 on the average; on P80 they add about 48, because they also widen the spread), which take the plan to the simulated average (+84); the spread up to P80 adds 32, for 116 days of contingency. That is why the plan date is met in about 2 of 5,000 futures (default parameters, weather off, seed 42, 5,000 iterations).
+- **Where the delay comes from, by source** (Start here): each source is left out in turn, on the same random numbers, with its items exactly as planned: *if only this source went to plan, how much earlier would first fire be on average?* No order has to be chosen. With the same settings: equipment and materials +19 days, site construction +16, commissioning +4, permits and inspections +4, common risks +33, site handover and design 0 (on time by default); what the sources add together beyond their own bars, the combined effect (merge bias), is +8, for the same simulated average (+84).
 - **Criticality Index**: share of futures in which a node is on the driving path, traced back from the milestone through the link that actually set each start.
-- **Common Random Numbers**: every scenario reuses the same random draws, so differences come from the logic change only.
+- **Common Random Numbers**: every scenario reuses the same random draws, so differences come from the logic change only. Each node draws from its own stream, keyed by its id, so adding or removing a node never changes the draws of any other node.
 - **Sized weather horizon**: the simulation keeps only as many days of weather as the plan can reach (a pessimistic plan with every input at its 99.9th percentile, plus the late-start experiment, plus 25%), about 4.4 years for the reference plant with the default settings instead of 10. Weather draws are fixed per calendar day, so the horizon changes memory, never results. 5,000 iterations need about 70 MB.
 - **Latest dates**: a backward pass against the target gives each node's latest finish per future; the reported date holds in 80% of futures (adjustable).
 - **Distributions**: triangular for work, lognormal (median and P90) for reviews, whose waiting times have long right tails.
-- **Common risks**: one occurrence draw and one size draw per risk per iteration, from their own random stream, shared by every item the risk applies to. Work = sampled duration × product of factors + sum of added days. The attribution re-runs the same futures with one risk removed (what mitigation is worth) and with one risk alone. With the four illustrative risks, P80 moves about 48 days later without weather and 54 days later with the Xinwu weather (default parameters, 5,000 iterations).
+- **Common risks**: one occurrence draw and one size draw per risk per iteration, from their own random stream, shared by every item the risk applies to. Work = sampled duration × product of factors + sum of added days. The attribution re-runs the same futures with one risk removed (what mitigation is worth) and with one risk alone. With the four illustrative risks, P80 moves about 48 days later without weather and 54 days later with the station weather (default parameters, 5,000 iterations).
 
 ## Data and provenance
 
@@ -137,7 +142,8 @@ pytest
 - Rain and wind are drawn independently of each other, so a typhoon that stops both is not a joint event. Resampling whole historical years of CWA daily records would capture that.
 - Wind is measured at the station anemometer (about 10 m above ground); wind at crane working height is stronger. Daily maxima include night-time hours: on about 30% of days with 10-min wind ≥ 10 m/s the maximum fell outside 07:00–18:00, so warnings can overstate windy working days.
 - One weather station for the whole site; rain is taken to stop civil and outdoor work only (indoor work continues once the envelope is closed, which is usual but not certain).
-- Design, procurement and transport are not expanded; each major package is one arrival with a delay spread.
+- Design, procurement and transport are not expanded; each design deliverable and major package is one arrival with a delay spread (design and site handover: a fixed delay the user sets, on time by default).
+- The split by source measures each source alone; how much they add together is shown as one combined bar, not attributed to individual sources.
 - Linear assets (tunnels) are split into segments with access logic, not simulated in 4D.
 - Resource levelling is not modelled; crew conflicts appear only as `resource` links.
 - Rules marked `pending` (wastewater permit, pressure-equipment inspection) are listed but not inserted until verified.
@@ -150,7 +156,7 @@ app.py                      Streamlit entry: sidebar settings, explicit Run, nav
 views/                      one page per question
 locus/
   distributions.py          inverse-CDF sampling (enables common random numbers)
-  model.py                  network, common risks, validation, topological order
+  model.py                  network, common risks, delay sources, validation, topological order
   rules.py                  rule engine and review templates
   weather.py                monthly table -> daily probabilities, spell transitions, weather rule
   weather_stats.py          monthly shares and spell lengths from daily records
@@ -160,7 +166,8 @@ locus/
   labels.py                 all UI wording
   help.py                   in-app guide loader
 config/
-  reference_plant.yaml      activities, external inputs, typed links, common risks, assets
+  reference_plant.yaml      activities, external inputs (site handover, design, equipment), typed links,
+                            delay sources, common risks, assets
   rules_taiwan.yaml         L2 rule pack (Taiwan, utility-owned)
   weather_cwa_xinwu.yaml    weather table built from CWA CODiS records (Xinwu 新屋 467050)
 scripts/
@@ -168,5 +175,6 @@ scripts/
   build_weather_table.py    daily records -> weather table
 docs/help_en.md, help_zh.md in-app guide, English and Traditional Chinese
 tests/                      pytest: engine against brute-force references and invariants, weather
-                            statistics, CODiS parser, licence wording (data/raw/ is never committed)
+                            statistics, CODiS parser, licence wording, plan gap and split by source,
+                            every page under Streamlit AppTest (data/raw/ is never committed)
 ```

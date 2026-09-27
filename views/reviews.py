@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from locus import analysis as A
 from locus import labels as L
 from views.shared import BLUE, LATE, MUTED, header, results, show, styled
 
@@ -16,7 +17,7 @@ lat = R["latest"].copy()
 if lat.empty:
     header("Reviews and latest dates", "No external input or review feeds the milestone.", help_key="reviews")
 else:
-    worst = lat.iloc[0]
+    worst = A.tightest_item(lat, model)
     if worst["margin_days"] < 0:
         headline = (f"{worst['short_name']} is {-worst['margin_days']:.0f} days past its latest "
                     f"acceptable date; {int((lat['margin_days'] < 0).sum())} of {len(lat)} items are already late.")
@@ -45,6 +46,13 @@ else:
     st.caption(f"Latest dates hold in {confidence:.0%} of simulated futures, with everything else as "
                "simulated. A red line means the plan or expectation is already later than the latest "
                "acceptable date.")
+    starters = lat[lat["id"].map(lambda nid: model.nodes[nid].condition == "handover")]
+    if not starters.empty and starters["margin_days"].min() < 0:
+        st.caption(f"The site handover and the start-of-works approval start every path, so their margin "
+                   f"({starters['margin_days'].min():.0f} days) is the whole plan's shortfall against the "
+                   "target, not a late handover. With the target on the plan date, which few futures meet, "
+                   "most items show red; set the target to a committed date (for example the P80 date) to "
+                   "see the float each item really has.")
 
     with st.expander("Latest dates in detail"):
         st.dataframe(pd.DataFrame({

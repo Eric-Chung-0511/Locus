@@ -34,8 +34,8 @@ found = A.late_start_headline(R["both_modes"])
 if found:
     k, off_days, on_days = found
     cards.append((f"A {k}-week late start: without and with weather",
-                  f"Without weather, first fire (P50) moves {off_days:.0f} days; with the "
-                  f"{R['weather'].get('station_name', 'station')} weather it moves {on_days:.0f} days. "
+                  f"Without weather, first fire (P50) moves {off_days:.0f} days; with recorded "
+                  f"weather it moves {on_days:.0f} days. "
                   "The gap is what weather adds to a late start.",
                   "late_start", "See both curves"))
 
@@ -88,7 +88,7 @@ if not single.empty and not combined.empty:
 # 4. The external input or review that is already latest
 lat = R["latest"]
 if not lat.empty:
-    worst = lat.iloc[0]
+    worst = A.tightest_item(lat, R["model"])
     if worst["margin_days"] < 0:
         text = (f"{worst['short_name']} is already {-worst['margin_days']:.0f} days past the latest date "
                 f"that protects the target in {R['confidence']:.0%} of futures.")

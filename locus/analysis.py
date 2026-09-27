@@ -4,6 +4,7 @@ Decision outputs built on top of simulation results.
 Every function answers one question a planner or delivery PM gets asked:
     milestone_summary   -> "How likely is the date?"
     plan_gap            -> "Why does the single-number plan miss, and by how much for each reason?"
+    source_gap          -> the same gap by where the delay comes from (design, equipment, permits...)
     criticality_table   -> "What actually drives it?"
     driver_chains       -> the same, with items that are always critical together merged
     latest_dates        -> "How late can this delivery / submission be?"
@@ -16,12 +17,14 @@ Every function answers one question a planner or delivery PM gets asked:
 
 from __future__ import annotations
 
+import copy
 from dataclasses import replace
 from datetime import date
 
 import numpy as np
 import pandas as pd
 
+from . import distributions as dist
 from . import labels as L
 from .model import HARD_LINK_TYPES, Model
 from .simulate import RandomBank, Scenario, SimResult, point_plan, simulate
@@ -69,10 +72,12 @@ def plan_gap(model: Model, bank: RandomBank, daily_p: dict[str, np.ndarray],
 
         plan        point pass: most-likely durations, deliveries on the planned day,
                     average weather, no common risks (the deterministic plan)
-        deliveries  point pass with every delivery at planned day + expected delay.
-                    Delays run from 0 upwards, so a delivery can only be late.
-        durations   point pass with every duration at its expected value. For a
-                    right-skewed range the mean is above the most-likely value.
+        deliveries  point pass with every external input (deliveries, design,
+                    site handover) at planned day + expected delay + any tested
+                    delay. Delays run from 0 upwards, so an input can only be late.
+        durations   point pass with every duration at its expected value (plus any
+                    tested delay). For a right-skewed range the mean is above the
+                    most-likely value.
         merge       simulated MEAN finish without common risks, minus the previous
                     point pass. A point pass takes max() of the average paths; the
                     simulation averages max() of the realised paths, and
@@ -91,9 +96,10 @@ def plan_gap(model: Model, bank: RandomBank, daily_p: dict[str, np.ndarray],
     """
     scen = base.scenario
     no_risks = replace(scen, disabled_risks=frozenset(r.id for r in model.risks))
-    plan = point_plan(model, daily_p, scen, "typical", "planned")
-    late_deliveries = point_plan(model, daily_p, scen, "typical", "mean")
-    mean_values = point_plan(model, daily_p, scen, "mean", "mean")
+    externals = frozenset(n for n, node in model.nodes.items() if node.kind == "external")
+    plan = point_plan(model, daily_p, scen)
+    late_deliveries = point_plan(model, daily_p, scen, externals)
+    mean_values = point_plan(model, daily_p, scen, frozenset(model.nodes))
     finish = base.milestone_finish()
     with_risks = float(np.mean(finish[np.isfinite(finish)]))
     if model.risks and len(scen.disabled_risks) < len(model.risks):
@@ -103,9 +109,11 @@ def plan_gap(model: Model, bank: RandomBank, daily_p: dict[str, np.ndarray],
         without_risks = with_risks
     days = {"deliveries": late_deliveries - plan, "durations": mean_values - late_deliveries,
             "merge": without_risks - mean_values, "risks": with_risks - without_risks}
+    has_risks = bool(model.risks) and len(scen.disabled_risks) < len(model.risks)
     rows, level = [], plan
     for key in GAP_STEPS:
-        rows.append({"step": key, "days": days[key], "from_day": level, "to_day": level + days[key]})
+        rows.append({"step": key, "days": days[key], "from_day": level, "to_day": level + days[key],
+                     "show": key != "risks" or has_risks})
         level += days[key]
     return {
         "steps": pd.DataFrame(rows),
@@ -115,6 +123,87 @@ def plan_gap(model: Model, bank: RandomBank, daily_p: dict[str, np.ndarray],
         "has_risks": bool(model.risks) and len(scen.disabled_risks) < len(model.risks),
     }
 
+
+
+def _at_plan(model: Model, node_ids: set[str]) -> Model:
+    """A copy of the model in which the given items behave exactly as planned:
+    most-likely duration, arrival on the planned day (no delay)."""
+    fixed = copy.deepcopy(model)
+    for nid in node_ids:
+        node = fixed.nodes[nid]
+        if node.duration is not None:
+            node.duration = {"dist": "fixed", "value": dist.typical_value(node.duration)}
+        if node.delay is not None:
+            node.delay = {"dist": "fixed", "value": 0.0}
+    return fixed
+
+
+def source_gap(model: Model, bank: RandomBank, daily_p: dict[str, np.ndarray],
+               base: SimResult) -> dict | None:
+    """
+    The plan gap by WHERE the delay comes from, for readers who think in
+    departments rather than mechanisms: the plant file's `delay_sources` (site
+    handover, design, equipment, permits, site construction, commissioning),
+    weather and common risks.
+
+    Each source is measured by leaving it out (same random numbers):
+
+        effect(source) = simulated mean  -  simulated mean with that source's items
+                                            exactly as planned (most-likely durations,
+                                            planned arrivals, no tested delay)
+        effect(weather) = simulated mean - simulated mean without weather, less
+                          the average weather loss the plan already carries
+        effect(risks)   = simulated mean - simulated mean without common risks
+
+    "If only this source went to plan, first fire would be this much earlier on
+    average." No order has to be chosen. The effects add up to less than the
+    whole gap when late sources compound: first fire waits for the latest of
+    the converging paths, so fixing one source alone lets another path take
+    over. That remainder is the combined effect (merge bias), the last step:
+
+        plan + sum(effects) + combined = simulated mean     (exactly)
+
+    Returns None when the plant file defines no delay sources.
+    """
+    if not model.delay_sources:
+        return None
+    scen = base.scenario
+    has_risks = bool(model.risks) and len(scen.disabled_risks) < len(model.risks)
+    tested = scen.extra
+
+    def mean_of(res: SimResult) -> float:
+        finish = res.milestone_finish()
+        return float(np.mean(finish[np.isfinite(finish)]))
+
+    plan = point_plan(model, daily_p, scen)
+    mean_all = mean_of(base)
+    effects: list[dict] = []
+    for src in model.delay_sources:
+        members = set(src.members)
+        planned = replace(scen, extra_days=tuple((k, v) for k, v in scen.extra_days if k not in members))
+        effects.append({"step": src.key, "label": src.label, "what": src.what,
+                        "days": mean_all - mean_of(simulate(_at_plan(model, members), bank, planned))})
+    if not scen.ignore_weather:
+        dry = replace(scen, ignore_weather=True)
+        in_plan = plan - point_plan(model, daily_p, dry)
+        effects.append({"step": "weather", "days": mean_all - mean_of(simulate(model, bank, dry)) - in_plan})
+    if has_risks:
+        no_risks = replace(scen, disabled_risks=frozenset(r.id for r in model.risks))
+        effects.append({"step": "risks", "days": mean_all - mean_of(simulate(model, bank, no_risks))})
+    effects.append({"step": "combined", "days": (mean_all - plan) - sum(e["days"] for e in effects)})
+
+    rows, level = [], plan
+    for e in effects:
+        rows.append({**e, "from_day": level, "to_day": level + e["days"], "show": True})
+        level += e["days"]
+    finish = base.milestone_finish()
+    return {
+        "steps": pd.DataFrame(rows),
+        "plan_day": plan, "mean_day": mean_all,
+        "p50_day": _q(finish, 0.5), "p80_day": _q(finish, 0.8),
+        "weather_applied": not scen.ignore_weather, "has_risks": has_risks,
+        "sources": [s.key for s in model.delay_sources],
+    }
 
 
 def plan_gap_days(gap: dict) -> pd.DataFrame:
@@ -131,12 +220,16 @@ def plan_gap_days(gap: dict) -> pd.DataFrame:
     """
     plan = gap["plan_day"]
     steps = gap["steps"]
-    if not gap.get("has_risks", True):
-        steps = steps[steps["step"] != "risks"]
+    if "show" in steps:
+        steps = steps[steps["show"]]
     rows, prev = [], 0
     for _, r in steps.iterrows():
         level = int(round(r["to_day"] - plan))
-        rows.append({"step": r["step"], "days": level - prev, "from_offset": prev, "to_offset": level})
+        row = {"step": r["step"], "days": level - prev, "from_offset": prev, "to_offset": level}
+        for key in ("label", "what"):          # set by source_gap for the plant's own sources
+            if key in steps and isinstance(r.get(key), str):
+                row[key] = r[key]
+        rows.append(row)
         prev = level
     mean = prev
     p80 = int(round(gap["p80_day"] - plan))
@@ -268,6 +361,21 @@ def latest_dates(res: SimResult, start: date, target_day: float, confidence: flo
 
 
 # ------------------------------------------------------------ recovery options
+def tightest_item(latest: pd.DataFrame, model: Model) -> pd.Series | None:
+    """
+    The external input or review with the least margin, for headlines. Items
+    that start the whole project (condition `handover`: site handover,
+    start-of-works approval) are left out when others exist: every path runs
+    through them, so their margin is the plan's own shortfall against the
+    target, not something a late handover caused.
+    """
+    if latest.empty:
+        return None
+    starters = latest["id"].map(lambda nid: model.nodes[nid].condition == "handover")
+    rest = latest[~starters]
+    return (rest if not rest.empty else latest).sort_values("margin_days").iloc[0]
+
+
 def recovery_options(model: Model, bank: RandomBank, base: SimResult, target_day: float) -> pd.DataFrame:
     """
     Break one soft link at a time (same random numbers) and measure the gain.

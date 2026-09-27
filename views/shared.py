@@ -11,14 +11,17 @@ All display text goes through locus.labels.
 
 from __future__ import annotations
 
+import textwrap
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from locus import help as H
 from locus import labels as L
+from locus.weather import day_to_date
 
 # ----------------------------------------------------------------- visual tokens
 # Off-white base, light-blue accents, faint grid.
@@ -35,6 +38,8 @@ CONDITION_COLORS = {
     L.condition_label("supply"): "#7DB9A5",
     L.condition_label("regulatory"): "#D9A35F",
     L.condition_label("milestone"): INK,
+    L.condition_label("design"): "#9FB8D0",
+    L.condition_label("handover"): "#B7A7C9",
     L.condition_label("mixed"): "#C9B8A6",
 }
 LINK_COLORS = {
@@ -52,6 +57,7 @@ DEFAULT_DISCLAIMER = "Simulation for demonstrating the method; not a forecast."
 
 # Page files, used by st.navigation in app.py and by st.page_link on the Summary page.
 PAGES = {
+    "start": "views/start.py",
     "guide": "views/guide.py",
     "summary": "views/summary.py",
     "confidence": "views/confidence.py",
@@ -96,6 +102,82 @@ def show(fig: go.Figure, toolbar: bool = False, **kwargs: Any):
     """Render a styled chart. The Plotly toolbar is hidden unless asked for."""
     return st.plotly_chart(fig, theme=None, config={"displayModeBar": toolbar, "displaylogo": False},
                            **kwargs)
+
+
+def confidence_figure(finish: np.ndarray, S: dict, start, height: int = 420,
+                      show_target: bool = True) -> go.Figure:
+    """
+    Cumulative chance of first fire by each date (the CDF of the simulated
+    finish days), with vertical lines for the plan (and target), P50 and P80.
+    """
+    ms = np.sort(finish[np.isfinite(finish)])
+    cdf = np.arange(1, ms.size + 1) / ms.size
+    fig = go.Figure(go.Scatter(x=day_to_date(start, ms), y=cdf, mode="lines",
+                               line=dict(color=BLUE, width=2.5, shape="hv"),
+                               name="Chance of first fire by this date",
+                               hovertemplate="%{x|%Y-%m-%d}<br>%{y:.0%}<extra></extra>"))
+    # Reference lines. Plan and target often coincide: show one merged label then.
+    markers = []
+    if not show_target:
+        markers.append(("Plan", S["plan_day"], INK, "dash"))
+    elif abs(S["plan_day"] - S["target_day"]) < 1:
+        markers.append(("Plan and target", S["plan_day"], INK, "dash"))
+    else:
+        markers += [("Plan", S["plan_day"], MUTED, "dot"), ("Target", S["target_day"], INK, "dash")]
+    markers += [("P50", S["p50_day"], BLUE_LIGHT, "solid"), ("P80", S["p80_day"], BLUE, "solid")]
+    markers.sort(key=lambda m: m[1])
+    last_x, level = None, 0
+    for label, day, color, dash in markers:
+        # Stagger labels that sit within about ten days of each other.
+        level = level + 1 if last_x is not None and day - last_x < 10 else 0
+        last_x = day
+        x = pd.Timestamp(day_to_date(start, day))
+        fig.add_shape(type="line", x0=x, x1=x, y0=0, y1=1, line=dict(color=color, dash=dash, width=1.5))
+        fig.add_annotation(x=x, y=1.03 + 0.06 * level, text=label, showarrow=False,
+                           font=dict(color=color, size=12), yanchor="bottom")
+    fig.update_yaxes(tickformat=".0%", range=[0, 1.18], title="Chance of first fire by this date",
+                     tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1.0])
+    fig.update_xaxes(title=None, tickformat="%b %Y")
+    styled(fig, height)
+    fig.update_layout(margin=dict(t=40))  # room for the modebar above the marker labels
+    return fig
+
+
+def gap_figure(gap_days: pd.DataFrame, labels: list[str], texts: list[str], start, plan_day: float,
+               cause_keys: set[str], height: int = 360) -> go.Figure:
+    """
+    Horizontal waterfall of the plan gap (analysis.plan_gap_days): dark blue
+    causes, grey simulated average, light blue spread to P80, near-black P80.
+    `texts` are the hover explanations, one per row.
+    """
+    order = list(gap_days["step"])
+    role = {"mean": MUTED, "p80": INK, "spread": BLUE_LIGHT}
+    colors = [role.get(k, BLUE) for k in order]
+    lengths = (gap_days["to_offset"] - gap_days["from_offset"]).tolist()
+    bar_text = [f"{d:+d} d" if k in cause_keys or k == "spread"
+                else f"+{d} d, {day_to_date(start, plan_day + d):%d %b %Y}"
+                for k, d in zip(order, gap_days["days"])]
+    hover = ["<br>".join(textwrap.wrap(f"<b>{lab}</b><br>{t}", 70, break_long_words=False,
+                                       replace_whitespace=False)) for lab, t in zip(labels, texts)]
+    fig = go.Figure(go.Bar(
+        y=labels, x=lengths, base=gap_days["from_offset"], orientation="h", marker_color=colors,
+        text=bar_text, textposition="outside", cliponaxis=False, customdata=hover,
+        hovertemplate="%{customdata}<extra></extra>"))
+    fig.add_vline(x=0, line=dict(color=MUTED, dash="dot", width=1))
+    fig.update_yaxes(autorange="reversed", title=None)
+    fig.update_xaxes(title=f"Days after the single-number plan ({day_to_date(start, plan_day):%d %b %Y})",
+                     rangemode="tozero")
+    styled(fig, height)
+    fig.update_layout(bargap=0.35, margin=dict(r=110))
+    return fig
+
+
+def gap_table(labels: list[str], gap_days: pd.DataFrame, texts: list[str], actions: list[str]) -> None:
+    """The plan gap as a Markdown table (wraps long text; a dataframe would cut it off)."""
+    lines = ["| Step | Days | What it means | What you can do |", "|---|---:|---|---|"]
+    for lab, d, t, a in zip(labels, gap_days["days"], texts, actions):
+        lines.append(f"| {lab} | {d:+d} | {t} | {a} |")
+    st.markdown("\n".join(lines))
 
 
 # ----------------------------------------------------------------- numbers

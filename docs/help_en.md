@@ -12,9 +12,9 @@ Locus asks four questions that a planner or delivery PM hears in real meetings, 
 
 It does this by simulating the project many times (each run is one *iteration*, one possible future). Durations, deliveries, reviews and weather vary from one future to the next, following the ranges in the plant file. The answers are shares of those futures, not single dates.
 
-The reference plant is fictional: a generic single-shaft combined-cycle unit, from first piling to gas-turbine first fire. **Every result is a simulation that demonstrates the method; it is not a forecast.** Weather statistics come from ten years of daily records of the CWA station Xinwu (新屋, 467050), 2016–2025, processed by the author (資料來源：交通部中央氣象署 CODiS 氣候觀測資料查詢服務，依政府資料開放授權條款第 1 版使用，經作者加工計算). The source and this note are shown in small print on every page.
+The reference plant is fictional: a generic single-shaft combined-cycle unit in Taiwan, from site handover to gas-turbine first fire. **Every result is a simulation that demonstrates the method; it is not a forecast.** Weather statistics come from ten years of daily records (2016–2025) of a CWA weather station in north-western Taiwan, named on Assumptions and sources, processed by the author (資料來源：交通部中央氣象署 CODiS 氣候觀測資料查詢服務，依政府資料開放授權條款第 1 版使用，經作者加工計算). The source and this note are shown in small print on every page.
 
-Start with the **Summary** page: one finding per page, each with a link to the page that explains it. Every page also has a collapsed panel, **How to read this page**, with the explanation for that page. The **English / 中文** switch at the top of this Guide sets the language of the guide, those panels and the metric tooltips; the rest of the app stays in English.
+Start with the **Start here** page: what is simulated, what the plan says, what the simulated futures say, where the delay comes from, and three what-ifs. The **Summary** page then gives one finding per page, each with a link to the page that explains it. Every page also has a collapsed panel, **How to read this page**, with the explanation for that page. The **English / 中文** switch at the top of this Guide sets the language of the guide, those panels and the metric tooltips; the rest of the app stays in English.
 
 <!-- section: settings -->
 ## Settings (left sidebar)
@@ -23,13 +23,14 @@ Changing a setting does **not** recalculate. Press **Run** to update every page;
 
 | Setting | Meaning |
 |---|---|
-| Plant | The plant file: activities, deliveries, links and assets. |
-| Rule pack | The reviews, inspections and permits that apply in a jurisdiction. |
 | Apply weather to the schedule | **Off by default.** Off: weather is shown as warnings only (possible impacts) and does not change any date. On: rain and wind stop weather-sensitive work under the weather parameters. The Late-start cost page always shows both. |
 | Weather parameters (collapsed) | Weather table and station; rain stoppage threshold (mm/day); wind warning threshold and wind stoppage threshold (10-min mean, m/s); share of windy spells that stop work; remobilisation days after each wind stop (0–10); gust factor (display only: converts the wind thresholds to gust values). Every option is precomputed from the station record. Each setting's source and verification status is in its tooltip and on Assumptions and sources. |
 | Station | The weather station within that table. |
+| Delays to test (collapsed) | Days late for the site handover (notice to proceed), the start-of-works approval, each design deliverable (piling, foundation and steel IFC, the overseas maker's certified foundation drawings, the steel shop drawings) and steel fabrication. All are on time by default. Set one or several; the plan keeps its dates and the simulation carries the delays, so every page shows what they cost. |
 | Site start (first piling) | Day 0 of the project. |
 | Target first-fire date | The date you want to test. Defaults to the single-number plan date. |
+| Advanced: Plant | The plant file: activities, deliveries, links and assets. |
+| Advanced: Rule pack | The reviews, inspections and permits that apply in a jurisdiction. |
 | Advanced: Random seed | Fixes the random futures. The same seed always gives the same results. |
 | Advanced: Confidence for latest dates | Share of futures that a "latest acceptable date" must protect (default 80%). |
 | Advanced: Late-start experiment | How many weeks of late start to test. |
@@ -37,6 +38,21 @@ Changing a setting does **not** recalculate. Press **Run** to update every page;
 | Advanced: Weather stress test | Length of the forced stoppage tested on the Weather risk page (default 7 days). |
 | Advanced: Common risks move many items together | On: apply the plant file's common risks, each of which can slow many items at once. Off: every duration varies independently. The Common risks page shows their cost either way. |
 | Iterations | Number of simulated futures. 1,000 is enough for everyday use; use 5,000 for figures you publish. |
+
+<!-- section: start_here -->
+## Start here
+
+The story in five steps, for a first-time reader.
+
+1. **What is being simulated.** A generic single-shaft combined-cycle unit in Taiwan, one unit, utility owner, main equipment from overseas makers. The timeline shows the plan's phases from site handover to first fire. Diamonds are single events; bars span the first start to the last finish of each group.
+2. **What the plan says.** The single-number date a typical schedule produces: most-likely durations, deliveries on their planned day, average weather, nothing unexpected.
+3. **What the simulated futures say.** The chance that the plan date holds, the date half of the futures reach (P50) and the date 80% reach (P80), with the curve behind them.
+4. **Where the delay comes from.** The gap between the plan and the simulated average, split by source: site handover and start approval, design, equipment and materials, permits and inspections, site construction, commissioning, weather (when applied) and common risks. Each bar answers one question: *if only this source went exactly to plan, how much earlier would first fire be on average?* It is measured by re-running the same futures with that source's items as planned (most-likely durations, planned arrivals, no tested delay). The bars add up to less than the whole gap, because late sources compound: first fire waits for whichever converging path is latest, so fixing one source lets another path take over. That remainder is the last bar, **Combined effect (merge bias)**. Then grey is the simulated average, light blue the spread up to P80, and dark the contingency needed. Site handover and design are assumed on time and show 0 until you set a delay under **Delays to test**.
+5. **What if.** Three comparisons that are already computed: the site start slips four weeks (for example a late handover or approval), weather is applied, and the costliest common risk is removed.
+
+The Milestone confidence page splits the same gap by mechanism (late deliveries, skewed durations, merge bias, common risks) for readers who know schedule risk analysis. Both splits end at the same simulated average and P80.
+
+These results are a simulation that demonstrates the method; they are not a forecast.
 
 <!-- section: summary -->
 ## Summary
@@ -145,13 +161,13 @@ These results are a simulation that demonstrates the method; they are not a fore
 <!-- section: reviews -->
 ## Reviews and latest dates
 
-**Question:** which reviews apply, and how late can a delivery arrive or an application go in?
+**Question:** which reviews apply, and how late can a delivery arrive, a drawing be issued, the site be handed over or an application go in?
 
 **How the numbers are produced.** The rule pack reads each asset's attributes (for example a fixed crane of 3 t or more) and inserts the reviews that apply, each with its legal basis. A backward pass from the target then gives, in every iteration, the latest finish each item can have without pushing first fire past the target.
 
 **What you see.**
 
-- **Latest acceptable date:** the latest finish that still protects the target in the chosen share of futures (default 80%), holding everything else as simulated. For deliveries it is the latest arrival. For a review with a planned submission day it is the latest submission (latest finish minus the P80 review time). For other reviews it is the latest completion.
+- **Latest acceptable date:** the latest finish that still protects the target in the chosen share of futures (default 80%), holding everything else as simulated. For deliveries, design deliverables and the site handover it is the latest arrival or issue. For a review with a planned submission day it is the latest submission (latest finish minus the P80 review time). For other reviews it is the latest completion.
 - **Planned or expected:** the planned arrival or submission, or for other reviews the simulated P50 completion.
 - **Margin:** latest minus planned or expected. **Negative (red line) means the plan or expectation is already too late** for the target.
 - **Grade "A/C":** process grade / duration grade. For example, the process comes from law text (A) and the duration is a practitioner estimate (C).
@@ -166,7 +182,7 @@ These results are a simulation that demonstrates the method; they are not a fore
 
 **Question:** if the site starts late, does first fire move by the same amount, and how much does weather add?
 
-**How the numbers are produced.** Every site-start activity is delayed by the chosen number of weeks, while deliveries and the calendar stay put. The same simulated futures are re-run for each delay, **twice**: once without weather and once with weather applied (under the weather parameters). This page shows both whatever the switch is set to, because the gap between them is the finding.
+**How the numbers are produced.** Every site-start activity is delayed by the chosen number of weeks, as if the site handover or the start-of-works approval came late, while deliveries and the calendar stay put. The same simulated futures are re-run for each delay, **twice**: once without weather and once with weather applied (under the weather parameters). This page shows both whatever the switch is set to, because the gap between them is the finding.
 
 **What you see.**
 
@@ -232,4 +248,8 @@ Results built on these inputs are a simulation that demonstrates the method; the
 - **Remobilisation days:** days lost after a wind stop to restart work (re-rigging, checks, crew back on the lift).
 - **Stoppage test:** a forced loss of every weather-sensitive working day in a window, on top of the simulated weather, to see what a lost week costs at each point of the schedule.
 - **Common risk (risk driver):** one event that, when it occurs, slows many items at once by the same factor or number of days, so their delays move together instead of cancelling out.
+- **Notice to proceed (NTP) and site handover:** the owner's release of the site; no site work starts before it.
+- **Start-of-works approval:** the approved application to start work on site; piling starts after it.
+- **IFC (issued for construction):** a drawing released for building. For steel, IFC is followed by the fabricator's shop drawings and then fabrication, so steel design has to start early.
+- **Combined effect (merge bias) on Start here:** what the sources cost together beyond the sum of their own bars. Each bar keeps one source to plan while everything else varies; together they cost more because first fire waits for the latest path.
 - **Known limitation:** beyond weather and the common risks in the plant file, activity durations are drawn independently of each other. Dependence that no listed risk captures is not modelled.

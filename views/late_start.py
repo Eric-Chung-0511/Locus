@@ -13,12 +13,11 @@ from views.shared import BLUE, MUTED, header, results, show, styled
 
 R = results()
 both, W = R["both_modes"], R["weather"]
-station = W.get("station_name", "station")
 found = A.late_start_headline(both)
 if found:
     k, off_days, on_days = found
     headline = (f"Starting {k} weeks late moves P50 first fire by {off_days:.0f} days without weather "
-                f"and by {on_days:.0f} days with the {station} weather.")
+                f"and by {on_days:.0f} days with recorded weather.")
 else:
     headline = "No late start was tested."
 header("Late-start cost", headline, help_key="late_start")

@@ -23,6 +23,8 @@ Common Random Numbers: a RandomBank holds every uniform draw, so all scenarios
 from __future__ import annotations
 
 import logging
+import zlib
+from collections.abc import Collection
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -44,7 +46,7 @@ HORIZON_STEP = 30
 class Scenario:
     """Logic changes applied on top of the baseline network."""
     relaxed: frozenset = frozenset()   # link indices whose `relax` alternative is used
-    site_start_shift: int = 0          # days added to every site_start activity
+    site_start_shift: int = 0          # days added to every site_start item (activity start, external arrival)
     # (first_day, n_days): every weather-sensitive activity loses all of these
     # days, on top of the simulated weather (a forced stoppage for stress tests).
     stoppage: tuple[int, int] | None = None
@@ -53,7 +55,21 @@ class Scenario:
     # forced stoppage above still applies. The random numbers are the same, so
     # the difference to a weather run is the weather alone.
     ignore_weather: bool = False
+    # Fixed delays the user tests, as sorted (node id, days) pairs: added to an
+    # external input's arrival or to an activity's duration in every iteration.
+    # The single-number plan never carries them (it shows the planned dates).
+    extra_days: tuple[tuple[str, float], ...] = ()
     label: str = "Baseline"
+
+    @property
+    def extra(self) -> dict[str, float]:
+        """The tested delays as {node id: days}, leaving out zeros."""
+        return {nid: float(d) for nid, d in self.extra_days if d}
+
+
+def delays(mapping: dict[str, float]) -> tuple[tuple[str, float], ...]:
+    """{node id: days} -> the hashable form Scenario.extra_days expects (sorted, zeros dropped)."""
+    return tuple(sorted((nid, float(d)) for nid, d in mapping.items() if d))
 
 
 @dataclass
@@ -65,11 +81,22 @@ class EffectiveEdge:
     lag: float
 
 
+def node_stream(parent: np.random.SeedSequence, node_id: str) -> np.random.SeedSequence:
+    """
+    The random stream of one node: a child of the node stream keyed by a
+    32-bit checksum (CRC-32) of the node id. Keyed children are independent
+    of each other and do not depend on which other nodes exist.
+    """
+    key = zlib.crc32(node_id.encode("utf-8"))
+    return np.random.SeedSequence(parent.entropy, spawn_key=parent.spawn_key + (key,))
+
+
 class RandomBank:
     """
     All randomness for one (model, n_iter, seed) combination.
 
-    u_node[node_id] : one uniform per iteration for that node's duration/delay
+    u_node[node_id] : one uniform per iteration for that node's duration/delay,
+                      from the node's own stream (keyed by its id, see below)
     u_risk[risk_id] : (occurs, impact) uniforms per iteration for each common risk
     weather         : one uniform per iteration per calendar day, per kind.
                       A day is workable for rain-sensitive work when u_rain >= p_rain(day).
@@ -92,6 +119,11 @@ class RandomBank:
             raise ValueError("Use at least 50 iterations for stable percentiles")
         if horizon < 365:
             raise ValueError("Horizon must cover at least one year")
+        keys: dict[int, str] = {}
+        for nid in model.nodes:
+            other = keys.setdefault(zlib.crc32(nid.encode("utf-8")), nid)
+            if other != nid:
+                raise ValueError(f"Node ids '{other}' and '{nid}' share a random stream; rename one of them")
         self.n_iter = int(n_iter)
         self.seed = int(seed)
         self.horizon = int(horizon)
@@ -99,9 +131,10 @@ class RandomBank:
         # leaves the node and weather draws exactly as they were.
         node_seq, *weather_seqs, risk_seq = np.random.SeedSequence(self.seed).spawn(
             2 + len(self.WEATHER_KINDS))
-        rng = np.random.default_rng(node_seq)
-        # Sorted ids keep the draw order stable when nodes are added elsewhere.
-        self.u_node = {nid: rng.random(self.n_iter) for nid in sorted(model.nodes)}
+        # Every node draws from its own stream, keyed by its id: adding, removing
+        # or renaming one node never changes the draws of any other node.
+        self.u_node = {nid: np.random.default_rng(node_stream(node_seq, nid)).random(self.n_iter)
+                       for nid in sorted(model.nodes)}
         rng = np.random.default_rng(risk_seq)
         self.u_risk = {r.id: (rng.random(self.n_iter), rng.random(self.n_iter))
                        for r in sorted(model.risks, key=lambda r: r.id)}
@@ -425,6 +458,7 @@ def simulate(model: Model, bank: RandomBank, scenario: Scenario = Scenario()) ->
         incoming_eff[e.dst].append(e)
 
     factor, extra = risk_effects(model, bank, scenario.disabled_risks)
+    tested = scenario.extra
     overflow_total = 0
     for nid in model.order:
         node = model.nodes[nid]
@@ -432,10 +466,10 @@ def simulate(model: Model, bank: RandomBank, scenario: Scenario = Scenario()) ->
         u = bank.u_node[nid]
 
         if node.kind == "external":
-            delay = dist.sample(node.delay, u)
+            delay = dist.sample(node.delay, u) + tested.get(nid, 0.0)
             if nid in extra:
                 delay = delay + extra[nid]
-            arrival = node.planned_day + np.rint(delay)
+            arrival = node.planned_day + np.rint(delay) + (scenario.site_start_shift if node.site_start else 0)
             start[i] = arrival
             finish[i] = arrival
             continue
@@ -459,6 +493,7 @@ def simulate(model: Model, bank: RandomBank, scenario: Scenario = Scenario()) ->
             work = work * factor[nid]
         if nid in extra:
             work = work + extra[nid]
+        work = work + tested.get(nid, 0.0)
         work = np.maximum(np.rint(work), 0)
         if node.weather == "none":
             finish[i] = best + work
@@ -476,15 +511,19 @@ def simulate(model: Model, bank: RandomBank, scenario: Scenario = Scenario()) ->
 
 
 def _point_pass(model: Model, daily_p: dict[str, np.ndarray], scenario: Scenario,
-                duration_of, delay_of, risk_size=None) -> dict[str, tuple[float, float]]:
+                duration_of, delay_of, risk_size=None, mean_nodes: Collection[str] = frozenset(),
+                extra_for: Collection[str] = frozenset()) -> dict[str, tuple[float, float]]:
     """
     One forward pass with single-number durations and delays, weather handled
     as an AVERAGE loss: work on day d progresses by (1 - p(d)), so W working
     days finish when the cumulative expected progress reaches W.
-    duration_of(spec) and delay_of(spec) turn a distribution into one number.
+    duration_of(spec) and delay_of(spec) turn a distribution into one number;
+    nodes in `mean_nodes` use the expected value instead. The scenario's tested
+    delays (extra_days) are added only to nodes in `extra_for`.
     risk_size(risk) gives each common risk's factor or days as if it occurred;
     None leaves the risks out (the single-number plan does not carry them).
     """
+    tested = {nid: d for nid, d in scenario.extra.items() if nid in extra_for}
     progress = {k: np.cumsum(1.0 - np.asarray(v, dtype=float)) for k, v in daily_p.items()}
     factor: dict[str, float] = {}
     extra: dict[str, float] = {}
@@ -507,14 +546,17 @@ def _point_pass(model: Model, daily_p: dict[str, np.ndarray], scenario: Scenario
     for nid in model.order:
         node = model.nodes[nid]
         if node.kind == "external":
-            arrival = node.planned_day + round(delay_of(node.delay) + extra.get(nid, 0.0))
+            delay = dist.mean_value(node.delay) if nid in mean_nodes else delay_of(node.delay)
+            arrival = (node.planned_day + round(delay + extra.get(nid, 0.0) + tested.get(nid, 0.0))
+                       + (scenario.site_start_shift if node.site_start else 0))
             times[nid] = (arrival, arrival)
             continue
         s = node.earliest_day + (scenario.site_start_shift if node.site_start else 0)
         for e in incoming_eff[nid]:
             ps, pf = times[e.src]
             s = max(s, (pf if e.rel == "FS" else ps) + e.lag)
-        w = max(round(duration_of(node.duration) * factor.get(nid, 1.0) + extra.get(nid, 0.0)), 0)
+        work = dist.mean_value(node.duration) if nid in mean_nodes else duration_of(node.duration)
+        w = max(round(work * factor.get(nid, 1.0) + extra.get(nid, 0.0) + tested.get(nid, 0.0)), 0)
         if node.weather == "none" or w == 0 or scenario.ignore_weather:
             f = s + w
         else:
@@ -538,33 +580,30 @@ def deterministic_plan(model: Model, daily_p: dict[str, np.ndarray],
 
 
 def point_plan(model: Model, daily_p: dict[str, np.ndarray], scenario: Scenario = Scenario(),
-               durations: str = "typical", deliveries: str = "planned") -> float:
+               mean_nodes: Collection[str] = frozenset()) -> float:
     """
     Milestone finish day of one single-number pass (weather as an average loss,
-    common risks left out), with a choice of the single numbers:
+    common risks left out). Nodes in `mean_nodes` are REALISED on average: an
+    external input arrives on its planned day plus its expected delay plus any
+    tested delay, an activity takes its expected duration plus any tested
+    delay. Every other node keeps the plan's number: most-likely duration
+    (mode or median), arrival on the planned day.
 
-        durations   "typical" = most-likely value (mode or median), as in the plan
-                    "mean"    = expected value
-        deliveries  "planned" = on the planned day (no delay), as in the plan
-                    "mean"    = planned day plus the expected delay
-
-    point_plan(model, daily_p, s) equals the deterministic plan. Switching one
-    choice at a time shows how much of the gap to the simulation each
-    optimistic assumption explains (analysis.plan_gap).
+    point_plan(model, daily_p, s) equals the deterministic plan. Growing
+    `mean_nodes` one group at a time shows how much of the gap to the
+    simulation each group of optimistic assumptions explains (analysis.plan_gap).
     """
-    duration_of = {"typical": dist.typical_value, "mean": dist.mean_value}
-    delay_of = {"planned": lambda spec: 0.0, "mean": dist.mean_value}
-    if durations not in duration_of:
-        raise ValueError(f"durations must be one of {sorted(duration_of)}, not '{durations}'")
-    if deliveries not in delay_of:
-        raise ValueError(f"deliveries must be one of {sorted(delay_of)}, not '{deliveries}'")
-    times = _point_pass(model, daily_p, scenario, duration_of[durations], delay_of[deliveries])
+    unknown = set(mean_nodes) - set(model.nodes)
+    if unknown:
+        raise ValueError(f"Unknown node ids: {sorted(unknown)}")
+    times = _point_pass(model, daily_p, scenario, dist.typical_value, lambda spec: 0.0,
+                        mean_nodes=frozenset(mean_nodes), extra_for=frozenset(mean_nodes))
     return times[model.milestone][1]
 
 
 def required_horizon(model: Model, daily_p: dict[str, np.ndarray], extra_days: int = 0,
                      quantile: float = HORIZON_QUANTILE, margin: float = HORIZON_MARGIN,
-                     step: int = HORIZON_STEP) -> int:
+                     step: int = HORIZON_STEP, tested: tuple[tuple[str, float], ...] = ()) -> int:
     """
     Days of weather the simulation must cover, sized from the model instead of
     a fixed ten years (the weather bank's memory grows with the horizon).
@@ -572,7 +611,8 @@ def required_horizon(model: Model, daily_p: dict[str, np.ndarray], extra_days: i
     A pessimistic point pass puts EVERY duration and delivery delay at its
     `quantile` at once, lets every common risk occur at its `quantile` size
     (a risk that could only shorten work is left out), delays site start by
-    `extra_days` (the late-start experiment), and takes the later of the
+    `extra_days` (the late-start experiment), adds the `tested` delays
+    (Scenario.extra_days), and takes the later of the
     baseline and all-links-relaxed logic. The latest finish of any node, times `margin` for weather worse
     than the monthly average, rounded up to `step` days, is the horizon.
     `daily_p` must be long enough to hold that pessimistic plan.
@@ -593,8 +633,9 @@ def required_horizon(model: Model, daily_p: dict[str, np.ndarray], extra_days: i
     relax_all = frozenset(l.idx for l in model.relaxable_links())
     latest = 0.0
     for relaxed in (frozenset(), relax_all):
-        times = _point_pass(model, daily_p, Scenario(relaxed=relaxed, site_start_shift=int(extra_days)),
-                            at_q, at_q, worst_risk)
+        times = _point_pass(model, daily_p,
+                            Scenario(relaxed=relaxed, site_start_shift=int(extra_days), extra_days=tested),
+                            at_q, at_q, worst_risk, extra_for=frozenset(model.nodes))
         latest = max(latest, max(f for _, f in times.values()))
     days = int(np.ceil(latest * margin / step) * step)
     return max(365, days)

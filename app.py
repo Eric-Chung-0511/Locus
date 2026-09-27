@@ -5,17 +5,21 @@ Run:
     streamlit run app.py
 
 This script owns what every page shares:
-    - the scenario settings in the sidebar, including the weather switch:
-      off (default) = weather is shown as warnings only; on = it is applied to
-      the schedule under the rule set in the collapsed "Weather parameters",
+    - the scenario settings in the sidebar, in the order a first-time reader
+      needs them (the rest is collapsed): the weather switch (off = warnings
+      only; on = applied under the collapsed "Weather parameters"), "Delays to
+      test" (fixed delays for site handover, design and fabrication), dates,
+      "Advanced", iterations and Run,
     - the explicit Run button: changing a setting never recalculates; results
       update only when Run is pressed (st.session_state["run_params"]),
     - the cached simulation results (st.session_state["results"]),
     - the guide language (st.session_state["lang"]), set on the Guide page.
 Each page in views/ answers exactly one question:
+    Start here                : the story: the scenario, the plan, the simulation, where
+                                the delay comes from, what-ifs (landing page)
     Guide                     : bilingual guide with the English / 中文 switch
                                 (every other page also has "How to read this page")
-    Summary                   : the two-minute view, one finding per page (landing page)
+    Summary                   : the two-minute view, one finding per page
     Milestone confidence      : how likely is the plan date, and the target?
     What drives the date      : Criticality Index with series chains merged
     Common risks              : what each common risk costs, and removing it is worth
@@ -41,7 +45,7 @@ import yaml
 from locus import analysis as A
 from locus import labels as L
 from locus.model import ModelError, load_model
-from locus.simulate import (DEFAULT_HORIZON, RandomBank, Scenario, deterministic_plan,
+from locus.simulate import (DEFAULT_HORIZON, RandomBank, Scenario, delays, deterministic_plan,
                             required_horizon, simulate)
 from locus.weather import (WeatherError, WeatherRule, daily_exceedance, daily_persistence,
                            daily_probabilities, date_to_day, day_to_date, has_spells,
@@ -125,7 +129,8 @@ def run_all(plant_file: str, rules_file: str, weather_file: str, station: str,
             start: date, target: date, n_iter: int, seed: int,
             confidence: float, max_shift_weeks: int, spells: bool, stoppage_days: int,
             risks: bool, weather_on: bool, rain_mm: float, wind_warning_ms: int, wind_stop_ms: int,
-            stop_share: float, remobilisation_days: int, gust_factor: float) -> dict:
+            stop_share: float, remobilisation_days: int, gust_factor: float,
+            extra_days: tuple = ()) -> dict:
     """Every result the pages show, for one set of run parameters."""
     full = get_model(plant_file, rules_file)                   # with the plant's common risks
     risks = risks and bool(full.risks)
@@ -137,13 +142,15 @@ def run_all(plant_file: str, rules_file: str, weather_file: str, station: str,
     spells = spells and table_spells
     # The late-start experiment and the stoppage test both push work later.
     horizon = required_horizon(full, long_daily(weather_file, station, start, rule),
-                               extra_days=7 * max_shift_weeks + stoppage_days)
+                               extra_days=7 * max_shift_weeks + stoppage_days, tested=extra_days)
     bank, daily, illustrative = get_bank(plant_file, rules_file, n_iter, seed,
                                          weather_file, station, start, horizon, spells, rule)
 
     # The weather switch is a scenario flag: same random numbers in both modes.
-    mode = Scenario(ignore_weather=not weather_on)
-    mode_off, mode_on = Scenario(ignore_weather=True), Scenario(ignore_weather=False)
+    # The tested delays (Delays to test) apply to every scenario; the plan never carries them.
+    mode = Scenario(ignore_weather=not weather_on, extra_days=extra_days)
+    mode_off = Scenario(ignore_weather=True, extra_days=extra_days)
+    mode_on = Scenario(ignore_weather=False, extra_days=extra_days)
     base = simulate(model, bank, mode)
     plan = deterministic_plan(model, daily, mode)
     plan_day = plan[model.milestone][1]
@@ -193,6 +200,9 @@ def run_all(plant_file: str, rules_file: str, weather_file: str, station: str,
         "target_day": target_day, "illustrative": illustrative, "confidence": confidence,
         "summary": A.milestone_summary(base, start, target_day, plan_day),
         "gap": A.plan_gap(model, bank, daily, base),
+        "sources": A.source_gap(model, bank, daily, base),
+        "plan_times": plan,
+        "extra_days": dict(extra_days),
         "crit": A.criticality_table(base, start),
         "chains": A.driver_chains(base),
         "mix": A.driving_link_mix(base),
@@ -223,8 +233,9 @@ def plan_date_only(plant_file: str, rules_file: str, weather_file: str, station:
 st.set_page_config(page_title="Locus", layout="wide")
 
 page = st.navigation([
+    st.Page(PAGES["start"], title="Start here", default=True),
     st.Page(PAGES["guide"], title="Guide"),
-    st.Page(PAGES["summary"], title="Summary", default=True),
+    st.Page(PAGES["summary"], title="Summary"),
     st.Page(PAGES["confidence"], title="Milestone confidence"),
     st.Page(PAGES["drivers"], title="What drives the date"),
     st.Page(PAGES["risks"], title="Common risks"),
@@ -245,6 +256,13 @@ def _option_index(options: list, value) -> int:
 
 with st.sidebar:
     st.header("Scenario")
+    # Containers keep the reading order (weather, delays, dates, Advanced) while the
+    # plant and rule pack, chosen under Advanced, are read first.
+    weather_box = st.container()
+    delays_box = st.expander("Delays to test")
+    dates_box = st.container()
+    advanced = st.expander("Advanced")
+
     plants = config_choices("*plant*.yaml", "meta", "name")
     rule_packs = config_choices("rules_*.yaml", "display_name")
     weathers = config_choices("weather_*.yaml", "display_name")
@@ -252,72 +270,86 @@ with st.sidebar:
         st.error("The config folder needs a plant file, a rule pack (rules_*.yaml) "
                  "and a weather table (weather_*.yaml).")
         st.stop()
-    plant_file = plants[st.selectbox("Plant", list(plants))]
-    rules_file = rule_packs[st.selectbox("Rule pack", list(rule_packs))]
-
-    weather_on = st.toggle(
-        "Apply weather to the schedule", value=False,
-        help="Off (default): weather is shown as warnings only and does not change any date. "
-             "On: rain and wind stop weather-sensitive work under the rule in Weather parameters.")
-
-    with st.expander("Weather parameters"):
-        weather_file = weathers[st.selectbox("Weather table", list(weathers))]
-        try:
-            weather_table = load_weather_table(CONFIG / weather_file)
-        except WeatherError as exc:
-            st.error(str(exc))
-            st.stop()
-        station = st.selectbox("Station", list(weather_table["stations"]))
-        pars = table_parameters(weather_table)
-        rain_mm, wind_warning_ms, wind_stop_ms, stop_share, remobilisation_days, gust_factor = \
-            None, None, None, 1.0, None, 1.0
-        if has_thresholds(weather_table, station):
-            opts = threshold_options(weather_table, station)
-
-            def pick(key: str, label: str, options: list, unit: str):
-                spec = pars.get(key, {})
-                return st.selectbox(f"{label} ({unit})", options,
-                                    index=_option_index(options, spec.get("default", options[0])),
-                                    help=f"Source: {spec.get('source', '-')}. Status: {spec.get('status', '-')}.")
-
-            rain_mm = pick("rain_mm", "Rain stoppage threshold", opts["rain_mm"], "mm/day")
-            wind_warning_ms = pick("wind_warning_ms", "Wind warning threshold", opts["wind_ms"], "m/s, 10-min mean")
-            wind_stop_ms = pick("wind_stop_ms", "Wind stoppage threshold", opts["wind_ms"], "m/s, 10-min mean")
-            spec = pars.get("stop_share", {})
-            stop_share = st.slider("Share of windy spells that stop work", 0, 100,
-                                   int(round(100 * float(spec.get("default", 1.0)))), 10, format="%d%%",
-                                   help=f"Source: {spec.get('source', '-')}. Status: {spec.get('status', '-')}.") / 100
-            spec = pars.get("remobilisation_days", {})
-            remobilisation_days = st.select_slider(
-                "Remobilisation days after each wind stop", options=opts["remobilisation_days"],
-                value=spec.get("default", opts["remobilisation_days"][0]),
-                help=f"Source: {spec.get('source', '-')}. Status: {spec.get('status', '-')}.")
-            spec = pars.get("gust_factor", {})
-            gust_factor = st.number_input(
-                "Gust factor (display only)", min_value=1.0, max_value=3.0, step=0.01,
-                value=float(spec.get("default", 1.5)),
-                help=f"Converts the wind thresholds to gust values for comparison with crane manuals; "
-                     f"it does not change results. Source: {spec.get('source', '-')}. "
-                     f"Status: {spec.get('status', '-')}.")
-        station_spells = has_spells(weather_table, station)
-        spells = st.checkbox("Bad weather comes in spells", value=station_spells, disabled=not station_spells,
-                             help="Use the mean spell lengths in the weather table: a lost day makes the "
-                                  "next day more likely to be lost. Off: every day is drawn independently."
-                                  if station_spells else "This weather table has no spell lengths.")
-    rule = (rain_mm, wind_stop_ms, float(stop_share), remobilisation_days)
-
+    with advanced:
+        plant_file = plants[st.selectbox("Plant", list(plants))]
+        rules_file = rule_packs[st.selectbox("Rule pack", list(rule_packs))]
     try:
         model_preview = get_model(plant_file, rules_file)
     except (ModelError, ValueError) as exc:
         st.error(f"The plant or rule file has a problem: {exc}")
         st.stop()
-    default_start = date.fromisoformat(str(model_preview.meta.get("default_start_date", "2027-01-04")))
-    start = st.date_input("Site start (first piling)", value=default_start)
-    plan_default = plan_date_only(plant_file, rules_file, weather_file, station, start, weather_on, rule)
-    target = st.date_input("Target first-fire date", value=plan_default,
-                           help="Defaults to the single-number plan date. Move it to test a committed date.")
 
-    with st.expander("Advanced"):
+    with weather_box:
+        weather_on = st.toggle(
+            "Apply weather to the schedule", value=False,
+            help="Off (default): weather is shown as warnings only and does not change any date. "
+                 "On: rain and wind stop weather-sensitive work under the rule in Weather parameters.")
+
+        with st.expander("Weather parameters"):
+            weather_file = weathers[st.selectbox("Weather table", list(weathers))]
+            try:
+                weather_table = load_weather_table(CONFIG / weather_file)
+            except WeatherError as exc:
+                st.error(str(exc))
+                st.stop()
+            station = st.selectbox("Station", list(weather_table["stations"]))
+            pars = table_parameters(weather_table)
+            rain_mm, wind_warning_ms, wind_stop_ms, stop_share, remobilisation_days, gust_factor = \
+                None, None, None, 1.0, None, 1.0
+            if has_thresholds(weather_table, station):
+                opts = threshold_options(weather_table, station)
+
+                def pick(key: str, label: str, options: list, unit: str):
+                    spec = pars.get(key, {})
+                    return st.selectbox(f"{label} ({unit})", options,
+                                        index=_option_index(options, spec.get("default", options[0])),
+                                        help=f"Source: {spec.get('source', '-')}. Status: {spec.get('status', '-')}.")
+
+                rain_mm = pick("rain_mm", "Rain stoppage threshold", opts["rain_mm"], "mm/day")
+                wind_warning_ms = pick("wind_warning_ms", "Wind warning threshold", opts["wind_ms"], "m/s, 10-min mean")
+                wind_stop_ms = pick("wind_stop_ms", "Wind stoppage threshold", opts["wind_ms"], "m/s, 10-min mean")
+                spec = pars.get("stop_share", {})
+                stop_share = st.slider("Share of windy spells that stop work", 0, 100,
+                                       int(round(100 * float(spec.get("default", 1.0)))), 10, format="%d%%",
+                                       help=f"Source: {spec.get('source', '-')}. Status: {spec.get('status', '-')}.") / 100
+                spec = pars.get("remobilisation_days", {})
+                remobilisation_days = st.select_slider(
+                    "Remobilisation days after each wind stop", options=opts["remobilisation_days"],
+                    value=spec.get("default", opts["remobilisation_days"][0]),
+                    help=f"Source: {spec.get('source', '-')}. Status: {spec.get('status', '-')}.")
+                spec = pars.get("gust_factor", {})
+                gust_factor = st.number_input(
+                    "Gust factor (display only)", min_value=1.0, max_value=3.0, step=0.01,
+                    value=float(spec.get("default", 1.5)),
+                    help=f"Converts the wind thresholds to gust values for comparison with crane manuals; "
+                         f"it does not change results. Source: {spec.get('source', '-')}. "
+                         f"Status: {spec.get('status', '-')}.")
+            station_spells = has_spells(weather_table, station)
+            spells = st.checkbox("Bad weather comes in spells", value=station_spells, disabled=not station_spells,
+                                 help="Use the mean spell lengths in the weather table: a lost day makes the "
+                                      "next day more likely to be lost. Off: every day is drawn independently."
+                                      if station_spells else "This weather table has no spell lengths.")
+    rule = (rain_mm, wind_stop_ms, float(stop_share), remobilisation_days)
+
+    with delays_box:
+        adjustable = [n for n in model_preview.nodes.values() if n.adjustable]
+        st.caption("Days late for each item, alone or together. All are on time by default. "
+                   "The plan keeps its dates; the simulation carries the delays.")
+        tested = {n.id: st.number_input(f"{n.short_name} (days late)", min_value=0, max_value=365,
+                                        value=0, step=7, help=n.name)
+                  for n in adjustable}
+        if not adjustable:
+            st.caption("This plant file offers no items to delay.")
+    extra_days = delays(tested)
+
+    with dates_box:
+        default_start = date.fromisoformat(str(model_preview.meta.get("default_start_date", "2027-01-04")))
+        start = st.date_input("Site start (first piling)", value=default_start)
+        plan_default = plan_date_only(plant_file, rules_file, weather_file, station, start, weather_on, rule)
+        target = st.date_input("Target first-fire date", value=plan_default,
+                               help="Defaults to the single-number plan date. Move it to test a committed date.")
+
+    with advanced:
         seed = st.number_input("Random seed", value=42, step=1)
         confidence = st.slider("Confidence for latest dates", 0.5, 0.95, 0.8, 0.05)
         max_shift = st.slider("Late-start experiment: up to (weeks)", 4, 20, 12, 2)
@@ -343,7 +375,7 @@ current = {
     "spells": bool(spells), "stoppage_days": int(stoppage_days), "risks": bool(risks),
     "weather_on": bool(weather_on), "rain_mm": rain_mm, "wind_warning_ms": wind_warning_ms,
     "wind_stop_ms": wind_stop_ms, "stop_share": float(stop_share), "remobilisation_days": remobilisation_days,
-    "gust_factor": float(gust_factor),
+    "gust_factor": float(gust_factor), "extra_days": extra_days,
 }
 if run_pressed or "run_params" not in st.session_state:
     st.session_state["run_params"] = dict(current)

@@ -39,11 +39,9 @@ def test_point_plan_with_typical_values_is_the_deterministic_plan(model, daily):
         assert point_plan(model, daily, scen) == deterministic_plan(model, daily, scen)[model.milestone][1]
 
 
-def test_point_plan_rejects_unknown_choices(model, daily):
-    with pytest.raises(ValueError, match="durations"):
-        point_plan(model, daily, OFF, durations="p80")
-    with pytest.raises(ValueError, match="deliveries"):
-        point_plan(model, daily, OFF, deliveries="early")
+def test_point_plan_rejects_unknown_items(model, daily):
+    with pytest.raises(ValueError, match="Unknown node ids"):
+        point_plan(model, daily, OFF, {"NOT_A_NODE"})
 
 
 @pytest.mark.parametrize("scen", [OFF, Scenario()])

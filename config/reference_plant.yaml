@@ -7,7 +7,13 @@
 # illustrative assumptions unless a source grade says otherwise.
 #
 # Conventions
-#   - Time unit: days. Day 0 = site mobilisation / first piling.
+#   - Time unit: days. Day 0 = site mobilisation / first piling, once the owner
+#     has handed over the site (notice to proceed) and the start-of-works
+#     application is approved. Design deliverables may be dated before day 0.
+#   - `site_start: true` marks what the late-start experiment moves: the site
+#     handover and approval arrivals and the first work on each area.
+#   - `adjustable: true` offers an item under "Delays to test" in the app: the
+#     user can add a fixed delay (days) to its arrival or duration.
 #   - Weather-sensitive activities (weather: rain | wind): duration = WORKING days;
 #     a day is lost when the day's weather exceeds the stoppage threshold.
 #     rain: civil and outdoor work (piling, foundations, tunnels); indoor work
@@ -45,6 +51,9 @@ meta:
     Not based on, and not representative of, any specific real project.
 
 groups:
+  - "Site handover"
+  - "Design"
+  - "Fabrication"
   - "Construction: Turbine Hall"
   - "Construction: HRSG"
   - "Construction: linear assets"
@@ -58,23 +67,50 @@ groups:
   - "Reviews and permits"
 
 # -----------------------------------------------------------------------------
-# External inputs (interface nodes). Design, procurement and transport are not
-# expanded in v1; each major package is an arrival event with a delay spread.
-# The tool back-calculates the latest acceptable arrival for each of them.
+# External inputs (interface nodes). Site handover, design, procurement and
+# transport are not expanded; each package is an arrival event with a delay
+# spread. The tool back-calculates the latest acceptable arrival for each.
+# Main equipment (GT, generator, ST, HRSG) is imported from overseas OEMs.
 # -----------------------------------------------------------------------------
 externals:
+  # ---- Before site work: owner and start of works --------------------------
+  - {id: SITE_HANDOVER, name: "Site handed over by the owner (notice to proceed)", short_name: "Site handover (NTP)",
+     group: "Site handover", condition: handover, planned_day: 0, delay: {dist: fixed, value: 0}, adjustable: true, site_start: true,
+     source: {grade: C, note: "Author's field experience: utility owners hand over on time; private owners have been known to hand over late. Default: on time"}}
+  - {id: START_APPROVAL, name: "Start-of-works application approved", short_name: "Start-of-works approval",
+     group: "Site handover", condition: handover, planned_day: 0, delay: {dist: fixed, value: 0}, adjustable: true, site_start: true,
+     source: {grade: C, note: "Site work cannot start before the start-of-works application is approved. Default: on time"}}
+
+  # ---- Design deliverables ---------------------------------------------------
+  # Design is followed closely up to IFC (issued for construction), so it is
+  # assumed on time; practice differs between companies, so each delay is
+  # adjustable. Planned dates leave float before the work that needs them.
+  - {id: PILE_IFC, name: "Piling design issued for construction (IFC)", short_name: "Piling design IFC",
+     group: "Design", condition: design, planned_day: -30, delay: {dist: fixed, value: 0}, adjustable: true,
+     source: {grade: C, note: "Author's field experience: on time unless the design changes. Issued 30 days before piling"}}
+  - {id: FDN_IFC, name: "Foundation design issued for construction (IFC)", short_name: "Foundation design IFC",
+     group: "Design", condition: design, planned_day: 30, delay: {dist: fixed, value: 0}, adjustable: true,
+     source: {grade: C, note: "Author's field experience: on time unless the design changes. At least 30 days before the first foundation can start"}}
+  - {id: OEM_FDN_DWG, name: "Certified foundation and anchor-bolt drawings from the overseas OEM", short_name: "OEM foundation drawings",
+     group: "Design", condition: design, planned_day: 20, delay: {dist: fixed, value: 0}, adjustable: true,
+     source: {grade: C, note: "The turbine-generator pedestal cannot be built before the equipment maker certifies its loads and anchor bolts"}}
+  - {id: STEEL_IFC, name: "Turbine Hall steel design issued for construction (IFC)", short_name: "Steel design IFC",
+     group: "Design", condition: design, planned_day: 0, delay: {dist: fixed, value: 0}, adjustable: true,
+     source: {grade: C, note: "Author's field experience: IFC is only the start; the fabricator still has to prepare shop drawings"}}
+
+  # ---- Equipment and grid ----------------------------------------------------
   - {id: HRSG_MOD_DELIV, name: "HRSG modules on site (first batch)", short_name: "HRSG modules arrive", group: "External inputs",
      planned_day: 230, delay: {dist: triangular, min: 0, mode: 10, max: 45},
-     source: {grade: C, note: "Illustrative planned arrival"}}
+     source: {grade: C, note: "Illustrative planned arrival; imported from an overseas OEM"}}
   - {id: GT_DELIV, name: "Gas turbine on site", short_name: "Gas turbine arrives", group: "External inputs",
      planned_day: 330, delay: {dist: triangular, min: 0, mode: 10, max: 60},
-     source: {grade: C, note: "Illustrative planned arrival"}}
+     source: {grade: C, note: "Illustrative planned arrival; imported from an overseas OEM"}}
   - {id: GEN_DELIV, name: "Generator on site", short_name: "Generator arrives", group: "External inputs",
      planned_day: 330, delay: {dist: triangular, min: 0, mode: 10, max: 60},
-     source: {grade: C, note: "Illustrative planned arrival"}}
+     source: {grade: C, note: "Illustrative planned arrival; imported from an overseas OEM"}}
   - {id: ST_DELIV, name: "Steam turbine and condenser on site", short_name: "ST and condenser arrive", group: "External inputs",
      planned_day: 345, delay: {dist: triangular, min: 0, mode: 10, max: 60},
-     source: {grade: C, note: "Illustrative planned arrival"}}
+     source: {grade: C, note: "Illustrative planned arrival; imported from an overseas OEM"}}
   - {id: TX_DELIV, name: "Step-up transformer on site", short_name: "Step-up transformer arrives", group: "External inputs",
      planned_day: 470, delay: {dist: triangular, min: 0, mode: 15, max: 90},
      source: {grade: B, note: "Long-lead item ordered at project start; industry surveys report roughly 2-3 year lead times for large power transformers"}}
@@ -86,6 +122,14 @@ externals:
 # Activities
 # -----------------------------------------------------------------------------
 activities:
+  # ---- Steel: shop drawings and fabrication ---------------------------------
+  - {id: STEEL_SHOP_DWG, name: "Turbine Hall steel shop drawings, prepared by the fabricator and approved", short_name: "Steel shop drawings",
+     group: "Design", condition: design, duration: {dist: fixed, value: 40}, adjustable: true,
+     source: {grade: C, note: "Author's field experience: after IFC the fabricator prepares shop drawings, so they must start early"}}
+  - {id: STEEL_FAB, name: "Turbine Hall steel fabrication and delivery to site", short_name: "Steel fabrication",
+     group: "Fabrication", condition: supply, duration: {dist: fixed, value: 80}, adjustable: true,
+     source: {grade: C, note: "Illustrative: fabrication and delivery of the first bays; finishes at least 30 days before steel erection can start"}}
+
   # ---- Turbine Hall ---------------------------------------------------------
   - {id: TH_PILE, name: "Turbine Hall piling", short_name: "Turbine hall piling", group: "Construction: Turbine Hall",
      condition: weather, weather: rain, site_start: true, earliest_day: 0,
@@ -282,6 +326,26 @@ activities:
 # Links
 # -----------------------------------------------------------------------------
 links:
+  # Before site work: no site work without the site and the start-of-works approval
+  - {from: SITE_HANDOVER, to: TH_PILE, rel: FS, lag: 0, type: contractual, why: "Work needs the site handed over by the owner"}
+  - {from: START_APPROVAL, to: TH_PILE, rel: FS, lag: 0, type: regulatory, why: "Site work starts after the start-of-works approval"}
+  - {from: SITE_HANDOVER, to: HRSG_PILE, rel: FS, lag: 0, type: contractual, why: "Work needs the site handed over by the owner"}
+  - {from: START_APPROVAL, to: HRSG_PILE, rel: FS, lag: 0, type: regulatory, why: "Site work starts after the start-of-works approval"}
+  - {from: SITE_HANDOVER, to: TX_FDN, rel: FS, lag: 0, type: contractual, why: "Work needs the site handed over by the owner"}
+  - {from: SITE_HANDOVER, to: BOP_CW_INTAKE, rel: FS, lag: 0, type: contractual, why: "Work needs the site handed over by the owner"}
+  - {from: SITE_HANDOVER, to: BOP_WATER, rel: FS, lag: 0, type: contractual, why: "Work needs the site handed over by the owner"}
+  - {from: SITE_HANDOVER, to: BOP_GAS, rel: FS, lag: 0, type: contractual, why: "Work needs the site handed over by the owner"}
+  # Design
+  - {from: PILE_IFC, to: TH_PILE, rel: FS, lag: 0, type: physical, why: "Piles are installed to an issued design"}
+  - {from: PILE_IFC, to: HRSG_PILE, rel: FS, lag: 0, type: physical, why: "Piles are installed to an issued design"}
+  - {from: FDN_IFC, to: TH_FDN, rel: FS, lag: 0, type: physical, why: "Foundations are built to an issued design"}
+  - {from: FDN_IFC, to: HRSG_FDN, rel: FS, lag: 0, type: physical, why: "Foundations are built to an issued design"}
+  - {from: FDN_IFC, to: TX_FDN, rel: FS, lag: 0, type: physical, why: "Foundations are built to an issued design"}
+  - {from: OEM_FDN_DWG, to: TH_FDN, rel: FS, lag: 0, type: physical, why: "The turbine-generator pedestal needs the maker's certified loads and anchor bolts"}
+  - {from: STEEL_IFC, to: STEEL_SHOP_DWG, rel: FS, lag: 0, type: physical, why: "Shop drawings follow the issued design"}
+  - {from: STEEL_SHOP_DWG, to: STEEL_FAB, rel: FS, lag: 0, type: physical, why: "Fabrication follows approved shop drawings"}
+  - {from: STEEL_FAB, to: TH_STEEL_MAIN, rel: FS, lag: 0, type: physical, why: "Erection needs fabricated steel on site"}
+
   # Turbine Hall
   - {from: TH_PILE, to: TH_FDN, rel: FS, lag: 0, type: physical, why: "Foundations sit on completed piles"}
   - {from: TH_FDN, to: TH_STEEL_MAIN, rel: SS, lag: 90, type: physical, why: "Steel starts on foundation portions that have reached strength"}
@@ -409,6 +473,36 @@ links:
 # for a real project. Keep them out of the activity ranges: a range should say
 # how the work varies when no common risk hits it, or the risk counts twice.
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Delay sources: how the "where does the delay come from" chart groups items.
+# Same selectors as common risks; an item belongs to the FIRST source it
+# matches, and the last source (no selectors) takes every item left.
+# -----------------------------------------------------------------------------
+delay_sources:
+  - key: handover
+    label: "Site handover and start approval"
+    what: "The owner hands over the site (notice to proceed) and the start-of-works application is approved before piling. Assumed on time; set a delay under Delays to test."
+    applies_to: {conditions: [handover]}
+  - key: design
+    label: "Design"
+    what: "Drawings issued for construction (piling, foundations, steel), the overseas maker's certified foundation drawings and the fabricator's steel shop drawings. Assumed on time, because design is followed closely up to IFC; set a delay under Delays to test."
+    applies_to: {conditions: [design]}
+  - key: supply
+    label: "Equipment and materials"
+    what: "Main equipment from overseas makers, the step-up transformer, the grid-side switchyard and fabricated steel. Delays start at zero: they can arrive late, never early."
+    applies_to: {conditions: [supply]}
+  - key: permits
+    label: "Permits and inspections"
+    what: "Reviews, inspections and grid-connection steps set by the rule pack. Waiting times have a long right tail: most are quick, a few drag on."
+    applies_to: {conditions: [regulatory]}
+  - key: commissioning
+    label: "Commissioning"
+    what: "Power receipt and system commissioning up to first fire. Durations skew late: problems found during tests take longer to fix than the time saved when tests go well."
+    applies_to: {groups: ["Gate 0: power receipt", "Gate A: condenser vacuum", "Gate B: GT spin", "Gate C: first-fire items"]}
+  - key: site
+    label: "Site construction"
+    what: "Piling, foundations, buildings, steel erection, tunnels and balance of plant. Durations skew late: overruns can be larger than savings."
+
 risks:
   - id: SITE_PRODUCTIVITY
     name: "Site productivity below plan (labour market, rework, supervision)"

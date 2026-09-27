@@ -26,10 +26,15 @@ LINK_TYPES = ("physical", "means", "regulatory", "contractual", "resource", "log
 HARD_LINK_TYPES = ("physical", "regulatory")
 RELATIONS = ("FS", "SS")
 WEATHER_KINDS = ("none", "rain", "wind")
-CONDITIONS = ("weather", "productivity", "supply", "regulatory", "milestone")
+CONDITIONS = ("weather", "productivity", "supply", "regulatory", "milestone", "design", "handover")
+# Conditions an external input can carry (it has no duration, so no weather or productivity).
+EXTERNAL_CONDITIONS = ("supply", "design", "handover", "regulatory")
 SHORT_NAME_MAX = 30   # chart axes use short names; longer labels squeeze the bars
 RISK_EFFECTS = ("factor", "days")
 RISK_SELECTORS = ("ids", "groups", "conditions", "kinds", "weather")
+SOURCE_LABEL_MAX = 40   # a delay source label is a chart row
+_SELECTOR_ATTR = {"ids": "id", "groups": "group", "conditions": "condition", "kinds": "kind",
+                  "weather": "weather"}
 
 
 class ModelError(ValueError):
@@ -49,10 +54,11 @@ class Node:
     planned_day: float = 0.0       # externals
     delay: dict | None = None      # externals
     earliest_day: float = 0.0      # own start constraint (e.g. a planned submission day)
-    site_start: bool = False       # shifted by the "start piling later" experiment
+    site_start: bool = False       # shifted by the late-start experiment (activity start or external arrival)
     source_grade: str = "C"
     source_note: str = ""
     rule_id: str | None = None     # set when a rule template created the node
+    adjustable: bool = False       # offered under "Delays to test" (a fixed delay the user sets)
 
 
 @dataclass
@@ -100,6 +106,23 @@ class Risk:
 
 
 @dataclass
+class DelaySource:
+    """
+    One source of delay for the "where does the delay come from" split
+    (analysis.source_gap), for example design, equipment or permits.
+
+    applies_to uses the same selectors as a common risk; an item belongs to the
+    FIRST source it matches, and a source without selectors takes every item
+    left. Model.compile() checks that every item belongs to a source.
+    """
+    key: str
+    label: str
+    what: str
+    applies_to: dict
+    members: list[str] = field(default_factory=list)
+
+
+@dataclass
 class RegisterRow:
     rule_id: str
     rule_name: str
@@ -121,6 +144,7 @@ class Model:
     milestone: str
     register: list[RegisterRow] = field(default_factory=list)
     risks: list[Risk] = field(default_factory=list)
+    delay_sources: list[DelaySource] = field(default_factory=list)
     jurisdiction: str = ""
     # Filled by compile()
     order: list[str] = field(default_factory=list)
@@ -222,6 +246,7 @@ class Model:
         self.incoming = incoming
         self.outgoing = outgoing
         self._resolve_risks()
+        self._resolve_sources()
 
         # Nodes that cannot reach the milestone do not affect it; report them.
         upstream = self.upstream_of(self.milestone)
@@ -255,19 +280,9 @@ class Model:
             sel = risk.applies_to or {}
             if not sel:
                 raise ModelError(f"{where}: applies_to needs at least one selector {RISK_SELECTORS}")
-            for key, values in sel.items():
-                if key not in RISK_SELECTORS:
-                    raise ModelError(f"{where}: unknown selector '{key}', expected one of {RISK_SELECTORS}")
-                if not isinstance(values, list) or not values:
-                    raise ModelError(f"{where}: selector '{key}' must be a non-empty list")
-            unknown = [nid for nid in sel.get("ids", []) if nid not in self.nodes]
-            if unknown:
-                raise ModelError(f"{where}: unknown item id(s) {', '.join(unknown)}")
-            attr = {"ids": "id", "groups": "group", "conditions": "condition", "kinds": "kind",
-                    "weather": "weather"}
+            self._check_selectors(where, sel)
             targets = [nid for nid in self.order
-                       if nid != self.milestone
-                       and all(getattr(self.nodes[nid], attr[k]) in v for k, v in sel.items())]
+                       if nid != self.milestone and self._matches(nid, sel)]
             if not targets:
                 raise ModelError(f"{where}: applies_to matches no item")
             externals = [nid for nid in targets if self.nodes[nid].kind == "external"]
@@ -275,6 +290,49 @@ class Model:
                 raise ModelError(f"{where}: a factor multiplies activity durations and cannot apply to "
                                  f"external inputs ({', '.join(externals)}); use effect: days")
             risk.targets = targets
+
+    def _check_selectors(self, where: str, sel: dict) -> None:
+        for key, values in sel.items():
+            if key not in RISK_SELECTORS:
+                raise ModelError(f"{where}: unknown selector '{key}', expected one of {RISK_SELECTORS}")
+            if not isinstance(values, list) or not values:
+                raise ModelError(f"{where}: selector '{key}' must be a non-empty list")
+        unknown = [nid for nid in sel.get("ids", []) if nid not in self.nodes]
+        if unknown:
+            raise ModelError(f"{where}: unknown item id(s) {', '.join(unknown)}")
+
+    def _matches(self, nid: str, sel: dict) -> bool:
+        """True when the item matches EVERY selector (its value is in the selector's list)."""
+        node = self.nodes[nid]
+        return all(getattr(node, _SELECTOR_ATTR[k]) in v for k, v in sel.items())
+
+    def _resolve_sources(self) -> None:
+        """Assign every item to the first delay source it matches (plant file `delay_sources`)."""
+        if not self.delay_sources:
+            return
+        seen: set[str] = set()
+        for src in self.delay_sources:
+            where = f"delay source {src.key}"
+            if src.key in seen:
+                raise ModelError(f"Duplicate delay source '{src.key}'")
+            seen.add(src.key)
+            if not src.label or len(src.label) > SOURCE_LABEL_MAX:
+                raise ModelError(f"{where}: label is required, at most {SOURCE_LABEL_MAX} characters")
+            if not src.what.strip():
+                raise ModelError(f"{where}: 'what' (one sentence for the reader) is required")
+            self._check_selectors(where, src.applies_to or {})
+            src.members = []
+        for nid in self.order:
+            src = next((s for s in self.delay_sources if self._matches(nid, s.applies_to or {})), None)
+            if src is None:
+                node = self.nodes[nid]
+                raise ModelError(f"{node.kind} {nid} (group '{node.group}', condition '{node.condition}') "
+                                 "belongs to no delay source; add a source without selectors last")
+            src.members.append(nid)
+
+    def source_of(self, nid: str) -> str | None:
+        """Key of the delay source an item belongs to, or None when the plant defines none."""
+        return next((s.key for s in self.delay_sources if nid in s.members), None)
 
     def upstream_of(self, target: str) -> set[str]:
         """All nodes with a path to `target` (including target)."""
@@ -355,6 +413,7 @@ def _node_from_activity(raw: dict) -> Node:
         earliest_day=float(raw.get("earliest_day", 0)),
         site_start=bool(raw.get("site_start", False)),
         source_grade=str(source.get("grade", "C")), source_note=source.get("note", ""),
+        adjustable=bool(raw.get("adjustable", False)),
     )
 
 
@@ -365,13 +424,25 @@ def _node_from_external(raw: dict) -> Node:
     if "planned_day" not in raw:
         raise ModelError(f"external {nid}: 'planned_day' is required")
     dist.validate(raw.get("delay"), f"external {nid}")
+    condition = raw.get("condition", "supply")
+    if condition not in EXTERNAL_CONDITIONS:
+        raise ModelError(f"external {nid}: condition must be one of {EXTERNAL_CONDITIONS}")
     source = raw.get("source", {}) or {}
     return Node(
         id=nid, name=raw.get("name", nid), group=raw.get("group", "External inputs"),
-        kind="external", short_name=str(raw.get("short_name", "")), condition="supply",
+        kind="external", short_name=str(raw.get("short_name", "")), condition=condition,
         planned_day=float(raw["planned_day"]), delay=dict(raw["delay"]),
         source_grade=str(source.get("grade", "C")), source_note=source.get("note", ""),
+        adjustable=bool(raw.get("adjustable", False)), site_start=bool(raw.get("site_start", False)),
     )
+
+
+def _source_from_raw(raw: dict) -> DelaySource:
+    key = raw.get("key")
+    if not key:
+        raise ModelError(f"Delay source without key: {raw}")
+    return DelaySource(key=str(key), label=str(raw.get("label", "")), what=str(raw.get("what", "")),
+                       applies_to=dict(raw.get("applies_to") or {}))
 
 
 def load_model(plant_path: str | Path, rules_path: str | Path | None, with_risks: bool = True) -> Model:
@@ -406,4 +477,5 @@ def load_model(plant_path: str | Path, rules_path: str | Path | None, with_risks
 
     if with_risks:
         model.risks = [_risk_from_raw(raw) for raw in plant.get("risks", []) or []]
+    model.delay_sources = [_source_from_raw(raw) for raw in plant.get("delay_sources", []) or []]
     return model.compile()

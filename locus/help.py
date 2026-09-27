@@ -20,7 +20,7 @@ from functools import lru_cache
 from pathlib import Path
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
-SECTION_KEYS = ("start", "settings", "summary", "confidence", "drivers", "risks", "recovery",
+SECTION_KEYS = ("start", "settings", "start_here", "summary", "confidence", "drivers", "risks", "recovery",
                 "reviews", "late_start", "weather", "assumptions", "glossary")
 LANG_FILES = {"en": "help_en.md", "zh": "help_zh.md"}
 _MARKER = re.compile(r"<!--\s*section:\s*([a-z_]+)\s*-->")

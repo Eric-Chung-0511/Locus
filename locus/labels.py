@@ -19,6 +19,8 @@ CONDITION_LABELS = {
     "supply": "Supply",
     "regulatory": "Review or permit",
     "milestone": "Milestone",
+    "design": "Design",
+    "handover": "Site handover",
     "mixed": "Mixed",
 }
 
@@ -78,7 +80,8 @@ PLAN_GAP_STEPS = {
         "label": "Deliveries arrive late",
         "phrase": "late deliveries",
         "what": "The plan puts every delivery on its planned day. Delay ranges start at zero, so a delivery "
-                "can be late but never early, and on average it arrives after the planned day.",
+                "can be late but never early, and on average it arrives after the planned day. Any delay set "
+                "under Delays to test (site handover, design) also lands here.",
         "action": "Order long-lead items earlier, or hold float in front of the work that needs them.",
     },
     "durations": {
@@ -106,9 +109,25 @@ PLAN_GAP_STEPS = {
                 "carry them.",
         "action": "Mitigate the costliest risk first; the Common risks page ranks them.",
     },
+    # Used by the split by source (Start here page).
+    "weather": {
+        "label": "Weather",
+        "phrase": "weather",
+        "what": "The plan takes off an average weather loss per day. In the simulation bad weather lands on "
+                "particular days, often in spells, and costs more when it hits work that drives first fire.",
+        "action": "Move weather-sensitive work to a better season, or protect it (covers, extra crews).",
+    },
+    "combined": {
+        "label": "Combined effect (merge bias)",
+        "phrase": "the combined effect",
+        "what": "Each bar above is measured alone: that source kept to plan, everything else as simulated. "
+                "Together they cost more, because first fire waits for the latest of several converging "
+                "paths; fix one and another path takes over.",
+        "action": "Work on several sources at once; fixing one alone gains less than its own bar suggests.",
+    },
     "mean": {
         "label": "Simulated average",
-        "what": "Where first fire lands on average: the plan plus the four steps above.",
+        "what": "Where first fire lands on average: the plan plus the steps above.",
     },
     "spread": {
         "label": "Spread up to P80",
