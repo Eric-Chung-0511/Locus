@@ -6,6 +6,10 @@
 # and public sources. It does not describe any real project. All durations are
 # illustrative assumptions unless a source grade says otherwise.
 #
+# The commissioning gates (Gate 0 power receipt, Gate A condenser vacuum, Gate B GT
+# spin, Gate C first-fire items) are the author's own simplified grouping of generic
+# commissioning logic. They are not an industry, code or manufacturer standard.
+#
 # Conventions
 #   - Time unit: days. Day 0 = site mobilisation / first piling, once the owner
 #     has handed over the site (notice to proceed) and the start-of-works
@@ -405,7 +409,7 @@ links:
   - {from: GEN_ONBASE, to: TH_EI, rel: SS, lag: 60, type: resource, why: "Isolated phase bus and generator cabling need the generator set"}
   - {from: TH_ROOF_CLAD, to: TH_EI, rel: FS, lag: 0, type: resource,
      why: "Panels and terminations normally wait for a weather-tight building",
-     relax: {proposal: "Start E&I before the roof is closed", rel: SS, lag: 45, cost: "Temporary weather protection for panels; moisture and dust damage risk; possible rework"}}
+     relax: {proposal: "Start E&I before the roof is closed", rel: SS, lag: 45, cost: "Temporary weather protection for panels; moisture and dust damage risk; possible rework. Panels, cables and other materials must be on site earlier"}}
   - {from: PIPERACK, to: TH_EI, rel: FS, lag: 0, type: resource,
      why: "Cable trays hang on the pipe rack",
      relax: {proposal: "Hang cable-tray supports with the rack", rel: SS, lag: 45, cost: "Install cable tray supports together with the rack; needs a coordinated lifting plan"}}
@@ -436,7 +440,7 @@ links:
   # Mechanical completion: every commissioning stream starts after construction and E&I are complete
   - {from: TH_EI, to: MECH_COMPLETE, rel: FS, lag: 0, type: resource, why: "Systems are turned over once E&I is complete",
      relax: {proposal: "Turn systems over area by area before all E&I is done", rel: FS, lag: -60,
-             cost: "Construction and commissioning work side by side in the same building: permit-to-work and isolation control, energised equipment near construction crews, more rework risk"}}
+             cost: "Construction and commissioning work side by side in the same building: permit-to-work and isolation control, energised equipment near construction crews, more rework risk. The first areas also need their materials, documents and approvals in place earlier"}}
   - {from: TH_MECH, to: MECH_COMPLETE, rel: FS, lag: 0, type: resource, why: "Systems are turned over once piping and auxiliaries are complete"}
   - {from: HRSG_EI, to: MECH_COMPLETE, rel: FS, lag: 0, type: resource, why: "Systems are turned over once HRSG E&I is complete"}
   - {from: STACK_MECH, to: MECH_COMPLETE, rel: FS, lag: 0, type: physical, why: "Exhaust gas needs a finished stack"}

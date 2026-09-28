@@ -51,7 +51,9 @@ st.write(
     "gas turbine's exhaust heat into steam. The main equipment comes from overseas makers. The simulation runs "
     "from the site handover and the start-of-works approval, through construction and equipment setting, to "
     "commissioning and the gas turbine's **first fire**, the first time it burns fuel. The plant, its durations "
-    "and its risks are illustrative: this demonstrates a method, it is not a forecast of any real project.")
+    "and its risks are illustrative: this demonstrates a method, it is not a forecast of any real project. "
+    "The commissioning gates (Gate 0, A, B, C) are the author's own simplified grouping of generic "
+    "commissioning logic, not an industry or manufacturer standard.")
 
 
 def phase_table() -> pd.DataFrame:

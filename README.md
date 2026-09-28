@@ -20,6 +20,9 @@ Most schedule tools answer "what is the status?". Locus answers the questions a 
 The reference model is a **generic single-shaft CCGT** (GT, generator and ST on one shaft; HRSG without bypass stack), one unit, in Taiwan, utility-owned, main equipment from overseas makers, from site handover and the start-of-works approval, through construction of the turbine hall, HRSG and stack, mechanical completion and commissioning, to **GT first fire**.
 
 > The reference plant is fictional. It is built from general engineering practice and public sources and does not describe any real project.
+> The commissioning gates (Gate 0, A, B and C) are the author's own simplified grouping of generic commissioning logic, not an industry or manufacturer standard.
+
+The power plant is only the vehicle. The method carries over to any programme with converging dependencies, risks shared across many tasks and "why don't we just start it earlier?" proposals, such as a product launch or a system migration.
 
 ## The app
 
@@ -163,6 +166,7 @@ What P6 does not hold and a planner has to add, which is where the judgement is:
 - Linear assets (tunnels) are split into segments with access logic, not simulated in 4D.
 - Resource levelling is not modelled; crew conflicts appear only as `resource` links.
 - Rules marked `pending` (wastewater permit, pressure-equipment inspection) are listed but not inserted until verified.
+- A "start early" gain is an upper bound. Each proposal shortens one link and assumes that what the earlier work needs (drawings, approvals, materials) is already in place. Only the main equipment and the design deliverables are modelled as arrivals, each as one arrival with no partial deliveries; other materials are not modelled. Design is on time by default and can be delayed under Delays to test. Design changes and problems found on site are risks, not prerequisites, and are not modelled separately.
 - Durations are illustrative. The value is in the structure and the questions it answers, not the specific dates.
 
 ## Project layout

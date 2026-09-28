@@ -159,6 +159,8 @@ The shipped risks are illustrative assumptions (grade C) for the method, not est
 - **Tested, no measurable effect:** proposals that move P50 by less than half a day and the chance by less than 0.1 percentage point. That result is useful too: their cost buys nothing today.
 - **All proposals together:** every proposal applied at once. It usually gains more than the best single proposal, because shortening one path lets the next one take over; recovery needs a combination, and the costs add up as well. If even the combination gains little, the lever is outside the site logic: check the latest-dates page.
 
+**What each gain assumes.** A proposal shortens one link and leaves everything upstream as simulated. It assumes that what the earlier work needs (drawings, approvals, materials) is already in place, so the gain is an upper bound. Only the main equipment and the design deliverables are modelled as arrivals, each as one arrival (no partial deliveries); other materials are not modelled. Design is on time by default; under *Delays to test* you can delay a design deliverable and the gains are recalculated with that delay. Design changes and problems found on site are risks, not prerequisites, and are not modelled separately.
+
 These results are a simulation that demonstrates the method; they are not a forecast.
 
 <!-- section: reviews -->
@@ -252,6 +254,7 @@ Results built on these inputs are a simulation that demonstrates the method; the
 - **Stoppage test:** a forced loss of every weather-sensitive working day in a window, on top of the simulated weather, to see what a lost week costs at each point of the schedule.
 - **Common risk (risk driver):** one event that, when it occurs, slows many items at once by the same factor or number of days, so their delays move together instead of cancelling out.
 - **Mechanical completion:** the turbine hall, the HRSG and the stack are built and their E&I is complete, and systems are turned over for commissioning. Every Gate A, B and C item starts after it (and after power receipt). Turning systems over area by area, before all E&I is done, is a proposal on Win time back.
+- **Commissioning gates (Gate 0, A, B, C):** the author's own simplified grouping of generic commissioning logic: power receipt, condenser vacuum, gas turbine spin and first-fire items. They are not an industry, code or manufacturer standard, and real projects group and sequence commissioning differently. The model does not force Gate A before Gate B.
 - **Notice to proceed (NTP) and site handover:** the owner's release of the site; no site work starts before it.
 - **Start-of-works approval:** the approved application to start work on site; piling starts after it.
 - **IFC (issued for construction):** a drawing released for building. For steel, IFC is followed by the fabricator's shop drawings and then fabrication, so steel design has to start early.
