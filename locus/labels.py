@@ -8,6 +8,7 @@ through these functions, so wording stays consistent across every view.
 
 from __future__ import annotations
 
+import textwrap
 from datetime import date
 from typing import Any, Mapping
 
@@ -182,6 +183,20 @@ def cap(text: str, limit: int = CHART_LABEL_MAX) -> str:
     """Shorten a chart category label to at most `limit` characters."""
     text = str(text)
     return text if len(text) <= limit else text[: limit - 1].rstrip(" ,;:") + "…"
+
+
+HOVER_WRAP_WIDTH = 60   # Plotly hover boxes do not wrap on their own; long single
+
+
+def wrap_hover(text: str, width: int = HOVER_WRAP_WIDTH) -> str:
+    """
+    Break a long hover-text line into several lines (Plotly '<br>') at word
+    boundaries, each at most `width` characters. Plotly draws a hover box as
+    wide as its longest unbroken line, so an un-wrapped sentence can overflow
+    past the edge of the chart's container and get clipped; wrapping keeps the
+    box narrow enough to stay inside it.
+    """
+    return "<br>".join(textwrap.wrap(str(text), width=width)) or str(text)
 
 
 def chain_label(first: str, last: str, n: int, limit: int = CHART_LABEL_MAX) -> str:

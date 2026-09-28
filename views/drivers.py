@@ -48,7 +48,8 @@ header("What drives the date",
 
 chains["Uncertainty type"] = chains["condition"].map(L.condition_label)
 chains["Drives first fire"] = chains["criticality"].map(pct)
-chains["hover_items"] = chains["members"].map(lambda ids: "<br>".join(model.nodes[n].name for n in ids))
+chains["hover_items"] = chains["members"].map(
+    lambda ids: "<br>".join(L.wrap_hover(model.nodes[n].name) for n in ids))
 plot = chains.iloc[::-1]
 fig = px.bar(plot, x="criticality", y="label", color="Uncertainty type", orientation="h",
              color_discrete_map=CONDITION_COLORS,

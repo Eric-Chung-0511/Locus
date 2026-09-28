@@ -35,6 +35,12 @@ single["Drives first fire today"] = single["on_driving_path"].map(pct)
 single["Change in chance"] = single["delta_p_on_target"].map(pts)
 single["Breaks the link"] = single["link"].str.replace(" -> ", " → ", regex=False)
 single["bar_text"] = single.apply(lambda r: f"{r['gain_p50_days']:+.0f} d, {pts(r['delta_p_on_target'])}", axis=1)
+# Wrapped copies for the hover box only: unwrapped, these run far wider than
+# the chart and get clipped at the edge of its container (tables keep the
+# unwrapped text via `table()` below).
+single["hover_proposal"] = single["proposal"].map(L.wrap_hover)
+single["hover_breaks"] = single["Breaks the link"].map(L.wrap_hover)
+single["hover_cost"] = single["cost_or_risk"].map(L.wrap_hover)
 
 
 def table(df: pd.DataFrame) -> pd.DataFrame:
@@ -56,8 +62,8 @@ else:
     plot = useful.iloc[::-1]
     fig = px.bar(plot, x="gain_p50_days", y="label", color="Link type", orientation="h",
                  color_discrete_map=LINK_COLORS, text="bar_text",
-                 custom_data=["proposal", "Breaks the link", "Drives first fire today", "Change in chance",
-                              "cost_or_risk"])
+                 custom_data=["hover_proposal", "hover_breaks", "Drives first fire today", "Change in chance",
+                              "hover_cost"])
     fig.update_traces(textposition="outside", cliponaxis=False,
                       hovertemplate="<b>%{customdata[0]}</b><br>Breaks: %{customdata[1]}"
                                     "<br>Drives first fire today: %{customdata[2]}"

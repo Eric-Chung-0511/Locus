@@ -84,7 +84,7 @@ bars = phases[phases["finish"] > phases["start"]]
 fig.add_trace(go.Bar(
     y=bars["label"], x=[(to_date(b) - to_date(a)).total_seconds() * 1000 for a, b in zip(bars["start"], bars["finish"])],
     base=[to_date(a) for a in bars["start"]], orientation="h", marker_color=BLUE,
-    customdata=[[f"{to_date(a):%d %b %Y} to {to_date(b):%d %b %Y}", g]
+    customdata=[[f"{to_date(a):%d %b %Y} to {to_date(b):%d %b %Y}", L.wrap_hover(g)]
                 for a, b, g in zip(bars["start"], bars["finish"], bars["groups"])],
     hovertemplate="<b>%{y}</b><br>%{customdata[0]}<br>%{customdata[1]}<extra></extra>"))
 points = phases[phases["finish"] <= phases["start"]]
