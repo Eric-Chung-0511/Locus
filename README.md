@@ -4,6 +4,8 @@
 
 **Live app:** https://8begpzao4qkmdjthwx2f4r.streamlit.app
 
+> **This is a fictional reference plant built for a portfolio demonstration.** It uses no real project's name, dates, quantities, layouts or client data; every duration and risk is an illustrative assumption built from general engineering practice and public sources. Every result the app shows is a simulation of that fictional plant, not a forecast of any real project.
+
 *Why "Locus":* in geometry a locus is the set of all points that satisfy a condition; here it is the set of dates on which first fire can land once everything it depends on is true.
 
 Most schedule tools answer "what is the status?". Locus answers the questions a project controls lead or delivery PM actually gets asked in the room:
@@ -19,7 +21,6 @@ Most schedule tools answer "what is the status?". Locus answers the questions a 
 
 The reference model is a **generic single-shaft CCGT** (GT, generator and ST on one shaft; HRSG without bypass stack), one unit, in Taiwan, utility-owned, main equipment from overseas makers, from site handover and the start-of-works approval, through construction of the turbine hall, HRSG and stack, mechanical completion and commissioning, to **GT first fire**.
 
-> The reference plant is fictional. It is built from general engineering practice and public sources and does not describe any real project.
 > The commissioning gates (Gate 0, A, B and C) are the author's own simplified grouping of generic commissioning logic, not an industry or manufacturer standard.
 
 The power plant is only the vehicle. The method carries over to any programme with converging dependencies, risks shared across many tasks and "why don't we just start it earlier?" proposals, such as a product launch or a system migration.
