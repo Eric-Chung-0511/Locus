@@ -56,12 +56,14 @@ groups:
   - "Fabrication"
   - "Construction: Turbine Hall"
   - "Construction: HRSG"
+  - "Construction: stack"
   - "Construction: linear assets"
   - "Construction: transformer yard"
   - "Balance of plant"
   - "External inputs"
   - "Reviews and permits"
   - "Gate 0: power receipt"
+  - "Mechanical completion"
   - "Gate A: condenser vacuum"
   - "Gate B: GT spin"
   - "Gate C: first-fire items"
@@ -72,12 +74,13 @@ timeline:
   - {label: "Site handover and design", groups: ["Site handover", "Design"]}
   - {label: "Steel fabrication", groups: ["Fabrication"]}
   - {label: "Turbine hall: piling to E&I", groups: ["Construction: Turbine Hall"]}
-  - {label: "Heat recovery steam generator", groups: ["Construction: HRSG"]}
+  - {label: "HRSG: piling to E&I", groups: ["Construction: HRSG"]}
+  - {label: "Stack: piling to mechanical", groups: ["Construction: stack"]}
   - {label: "Tunnels, yards and utilities", groups: ["Construction: linear assets", "Construction: transformer yard", "Balance of plant"]}
   - {label: "Main equipment arrives", groups: ["External inputs"]}
   - {label: "Inspections and permits", groups: ["Reviews and permits"]}
   - {label: "Power receipt from the grid", groups: ["Gate 0: power receipt"]}
-  - {label: "Commissioning to first fire", groups: ["Gate A: condenser vacuum", "Gate B: GT spin", "Gate C: first-fire items"]}
+  - {label: "Commissioning to first fire", groups: ["Mechanical completion", "Gate A: condenser vacuum", "Gate B: GT spin", "Gate C: first-fire items"]}
 
 # -----------------------------------------------------------------------------
 # External inputs (interface nodes). Site handover, design, procurement and
@@ -198,7 +201,7 @@ activities:
      condition: weather, weather: rain, site_start: true, earliest_day: 30,
      duration: {dist: triangular, min: 50, mode: 65, max: 90},
      source: {grade: C, note: "Illustrative"}}
-  - {id: HRSG_FDN, name: "HRSG and stack foundations", short_name: "HRSG foundations", group: "Construction: HRSG",
+  - {id: HRSG_FDN, name: "HRSG foundations", short_name: "HRSG foundations", group: "Construction: HRSG",
      condition: weather, weather: rain,
      duration: {dist: triangular, min: 75, mode: 90, max: 120},
      source: {grade: C, note: "Illustrative"}}
@@ -206,7 +209,7 @@ activities:
      condition: weather, weather: wind,
      duration: {dist: triangular, min: 110, mode: 130, max: 170},
      source: {grade: C, note: "Tall heavy lifts are wind-limited. The north-east monsoon (Oct-Mar) brings frequent strong wind on the west coast"}}
-  - {id: HRSG_PP, name: "HRSG pressure parts, piping and stack", short_name: "HRSG pressure parts", group: "Construction: HRSG",
+  - {id: HRSG_PP, name: "HRSG pressure parts and piping", short_name: "HRSG pressure parts", group: "Construction: HRSG",
      condition: productivity, duration: {dist: triangular, min: 180, mode: 210, max: 260},
      source: {grade: C, note: "Illustrative"}}
   - {id: HRSG_HYDRO, name: "HRSG hydrostatic test", short_name: "HRSG hydrotest", group: "Construction: HRSG",
@@ -214,6 +217,26 @@ activities:
      source: {grade: C, note: "Illustrative"}}
   - {id: HRSG_INSUL, name: "HRSG insulation and cladding", short_name: "HRSG insulation", group: "Construction: HRSG",
      condition: productivity, duration: {dist: triangular, min: 70, mode: 90, max: 120},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: HRSG_EI, name: "HRSG E&I: instruments, cabling, termination and loop checks", short_name: "HRSG E&I", group: "Construction: HRSG",
+     condition: productivity, duration: {dist: triangular, min: 90, mode: 120, max: 160},
+     source: {grade: C, note: "Illustrative: follows pressure-part and piping progress"}}
+
+  # ---- Stack (chimney) -----------------------------------------------------------
+  - {id: STACK_PILE, name: "Stack piling", short_name: "Stack piling", group: "Construction: stack",
+     condition: weather, weather: rain, site_start: true, earliest_day: 60,
+     duration: {dist: triangular, min: 20, mode: 25, max: 35},
+     source: {grade: C, note: "Illustrative: the piling rigs move over from the HRSG area"}}
+  - {id: STACK_FDN, name: "Stack foundation", short_name: "Stack foundation", group: "Construction: stack",
+     condition: weather, weather: rain,
+     duration: {dist: triangular, min: 30, mode: 40, max: 55},
+     source: {grade: C, note: "Illustrative"}}
+  - {id: STACK_ERECT, name: "Stack shell erection (heavy lifts)", short_name: "Stack erection", group: "Construction: stack",
+     condition: weather, weather: wind,
+     duration: {dist: triangular, min: 35, mode: 45, max: 65},
+     source: {grade: C, note: "Tall lifts are wind-limited, like the HRSG heavy lifts"}}
+  - {id: STACK_MECH, name: "Stack mechanical: platforms, ladders, emissions-monitoring ports and duct tie-in to the HRSG", short_name: "Stack mechanical", group: "Construction: stack",
+     condition: productivity, duration: {dist: triangular, min: 40, mode: 50, max: 70},
      source: {grade: C, note: "Illustrative"}}
 
   # ---- Linear assets (cross the whole site: common-cause nodes) ---------------
@@ -266,6 +289,11 @@ activities:
      condition: productivity, site_start: true, earliest_day: 360,
      duration: {dist: triangular, min: 250, mode: 300, max: 380},
      source: {grade: C, note: "Summary node"}}
+
+  # ---- Mechanical completion: construction and E&I complete ---------------------
+  - {id: MECH_COMPLETE, name: "Mechanical completion: construction and E&I complete, systems turned over for commissioning", short_name: "Mechanical completion", group: "Mechanical completion",
+     condition: milestone, duration: {dist: fixed, value: 0},
+     source: {grade: C, note: "Author's practice: commissioning to first fire starts once the turbine hall, HRSG and stack are built and their E&I is complete"}}
 
   # ---- Gate 0: power receipt (rule pack adds the review chain) ----------------
   - {id: MV_LV_BACKFEED, name: "Plant MV/LV distribution energised", short_name: "MV/LV backfeed", group: "Gate 0: power receipt",
@@ -392,6 +420,35 @@ links:
   - {from: HRSG_ERECT, to: HRSG_PP, rel: SS, lag: 60, type: resource, why: "Pressure-part work follows erection tier by tier"}
   - {from: HRSG_PP, to: HRSG_HYDRO, rel: FS, lag: 0, type: physical, why: "Pressure boundary must be complete to test it"}
   - {from: HRSG_HYDRO, to: HRSG_INSUL, rel: FS, lag: 0, type: physical, why: "Leak checks need bare pipe"}
+  - {from: HRSG_PP, to: HRSG_EI, rel: SS, lag: 120, type: resource, why: "Instruments and cabling follow the piping, area by area"}
+  - {from: HRSG_EI, to: C_HRSG_FILL, rel: FS, lag: 0, type: physical, why: "Drum level and pressure instruments must be live to fill the boiler"}
+
+  # Stack
+  - {from: SITE_HANDOVER, to: STACK_PILE, rel: FS, lag: 0, type: contractual, why: "Work needs the site handed over by the owner"}
+  - {from: START_APPROVAL, to: STACK_PILE, rel: FS, lag: 0, type: regulatory, why: "Site work starts after the start-of-works approval"}
+  - {from: PILE_IFC, to: STACK_PILE, rel: FS, lag: 0, type: physical, why: "Piles are installed to an issued design"}
+  - {from: STACK_PILE, to: STACK_FDN, rel: FS, lag: 0, type: physical, why: "Foundation sits on completed piles"}
+  - {from: FDN_IFC, to: STACK_FDN, rel: FS, lag: 0, type: physical, why: "Foundations are built to an issued design"}
+  - {from: STACK_FDN, to: STACK_ERECT, rel: FS, lag: 21, type: physical, why: "The foundation must reach strength before the shell goes up"}
+  - {from: STACK_ERECT, to: STACK_MECH, rel: FS, lag: 0, type: physical, why: "Platforms and ports go on the erected shell"}
+  - {from: HRSG_ERECT, to: STACK_MECH, rel: FS, lag: 0, type: physical, why: "The outlet duct ties the stack to the erected HRSG"}
+
+  # Mechanical completion: every commissioning stream starts after construction and E&I are complete
+  - {from: TH_EI, to: MECH_COMPLETE, rel: FS, lag: 0, type: resource, why: "Systems are turned over once E&I is complete",
+     relax: {proposal: "Turn systems over area by area before all E&I is done", rel: FS, lag: -60,
+             cost: "Construction and commissioning work side by side in the same building: permit-to-work and isolation control, energised equipment near construction crews, more rework risk"}}
+  - {from: TH_MECH, to: MECH_COMPLETE, rel: FS, lag: 0, type: resource, why: "Systems are turned over once piping and auxiliaries are complete"}
+  - {from: HRSG_EI, to: MECH_COMPLETE, rel: FS, lag: 0, type: resource, why: "Systems are turned over once HRSG E&I is complete"}
+  - {from: STACK_MECH, to: MECH_COMPLETE, rel: FS, lag: 0, type: physical, why: "Exhaust gas needs a finished stack"}
+
+  - {from: MECH_COMPLETE, to: C_IA, rel: FS, lag: 0, type: resource, why: "Commissioning starts on systems turned over at mechanical completion"}
+  - {from: MECH_COMPLETE, to: C_CW, rel: FS, lag: 0, type: resource, why: "Commissioning starts on systems turned over at mechanical completion"}
+  - {from: MECH_COMPLETE, to: C_CCCW, rel: FS, lag: 0, type: resource, why: "Commissioning starts on systems turned over at mechanical completion"}
+  - {from: MECH_COMPLETE, to: C_SFC_DCS, rel: FS, lag: 0, type: resource, why: "Commissioning starts on systems turned over at mechanical completion"}
+  - {from: MECH_COMPLETE, to: C_INTAKE_BOXUP, rel: FS, lag: 0, type: resource, why: "Commissioning starts on systems turned over at mechanical completion"}
+  - {from: MECH_COMPLETE, to: C_HRSG_FILL, rel: FS, lag: 0, type: resource, why: "Commissioning starts on systems turned over at mechanical completion"}
+  - {from: MECH_COMPLETE, to: C_FUEL_GAS, rel: FS, lag: 0, type: resource, why: "Commissioning starts on systems turned over at mechanical completion"}
+  - {from: MECH_COMPLETE, to: C_FIRE_FG, rel: FS, lag: 0, type: resource, why: "Commissioning starts on systems turned over at mechanical completion"}
 
   # Linear assets
   - {from: TH_FDN, to: PIPERACK, rel: SS, lag: 60, type: resource, why: "Rack foundations follow the main foundation crews"}
@@ -534,7 +591,7 @@ risks:
     effect: factor
     impact: {dist: triangular, min: 1.0, mode: 1.08, max: 1.25}
     applies_to:
-      groups: ["Construction: Turbine Hall", "Construction: HRSG", "Construction: linear assets",
+      groups: ["Construction: Turbine Hall", "Construction: HRSG", "Construction: stack", "Construction: linear assets",
                "Construction: transformer yard", "Balance of plant"]
       conditions: [weather, productivity]
     source: {grade: C, note: "Illustrative: a site-wide productivity shortfall slows all construction work together"}

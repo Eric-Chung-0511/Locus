@@ -620,8 +620,8 @@ def required_horizon(model: Model, daily_p: dict[str, np.ndarray], extra_days: i
     Only weather-sensitive work reads the weather bank, and it sits well before
     the milestone (civil and erection work), so taking the latest finish of ANY
     node is deliberately generous: for the reference plant weather work ends by
-    about day 770 even in the worst of 5,000 iterations, against a horizon of
-    about 1,230 days. If a run does go past it, the overflow is counted and
+    about day 720 even in the worst of 5,000 iterations, against a horizon of
+    about 1,590 days (without the late-start experiment). If a run does go past it, the overflow is counted and
     shown on the Assumptions page.
     """
     if not 0.5 <= quantile < 1:

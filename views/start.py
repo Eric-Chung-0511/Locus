@@ -101,8 +101,9 @@ styled(fig, 90 + 32 * len(phases))
 fig.update_layout(bargap=0.3, margin=dict(t=30), showlegend=False)
 show(fig)
 st.caption("The plan's phases in logical order, each from its first start to its last finish. Design starts "
-           "before site work because drawings must be issued first. Commissioning starts only once power is "
-           "received from the grid. Hover over a bar for what it includes.")
+           "before site work because drawings must be issued first. Commissioning starts at mechanical "
+           "completion, once the turbine hall, the HRSG and the stack are built and their E&I is complete, "
+           "and after power is received from the grid. Hover over a bar for what it includes.")
 
 # ------------------------------------------------------------- 2. the plan
 st.subheader("2. What the plan says")

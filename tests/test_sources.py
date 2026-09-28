@@ -177,3 +177,27 @@ def test_every_group_is_listed_in_display_order(model):
     assert {n.group for n in model.nodes.values()} <= set(model.groups)
     order = [model.groups.index(g) for g in ("Gate 0: power receipt", *COMMISSIONING)]
     assert order == sorted(order)
+
+
+@pytest.mark.parametrize("scen", [OFF, Scenario()])
+def test_commissioning_follows_mechanical_completion(model, make_bank, scen):
+    """Turbine hall, HRSG and stack work (with their E&I) finish before any commissioning starts."""
+    res = simulate(model, make_bank(), scen)
+    done = finish_of(res, "MECH_COMPLETE")
+    for nid in ("TH_EI", "TH_MECH", "HRSG_EI", "STACK_MECH"):
+        assert np.all(finish_of(res, nid) <= done), nid
+    for nid, node in model.nodes.items():
+        if node.group in COMMISSIONING:
+            assert np.all(start_of(res, nid) >= done), f"{nid} can start before mechanical completion"
+
+
+def test_construction_phases_end_before_commissioning_in_the_plan(model, daily):
+    plan = deterministic_plan(model, daily, OFF)
+    spans = {}
+    for nid, (s, f) in plan.items():
+        g = model.nodes[nid].group
+        lo, hi = spans.get(g, (s, f))
+        spans[g] = (min(lo, s), max(hi, f))
+    commissioning_start = min(spans[g][0] for g in COMMISSIONING)
+    for g in ("Construction: Turbine Hall", "Construction: HRSG", "Construction: stack"):
+        assert spans[g][1] <= commissioning_start, g
