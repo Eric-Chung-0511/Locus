@@ -84,7 +84,7 @@ def styled(fig: go.Figure, height: int = 420, legend: bool = False,
     fig.update_layout(
         paper_bgcolor=BG, plot_bgcolor=BG, font=dict(color=INK, size=13),
         margin=dict(l=10, r=10, t=16, b=10), height=height, showlegend=legend,
-        hoverlabel=dict(bgcolor="white", font_color=INK),
+        hoverlabel=dict(bgcolor="white", font_color=INK, align="left"),
     )
     if legend:
         fig.update_layout(

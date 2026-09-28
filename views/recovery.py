@@ -30,7 +30,7 @@ m2.metric("All proposals together: chance of meeting the target", pts(combined["
 m3.metric("Proposals with a measurable effect", f"{int(single['measurable'].sum())} of {len(single)}")
 
 single["Link type"] = single["type"].map(L.link_type_label)
-single["label"] = single["proposal"].map(L.cap)
+single["label"] = single["proposal"].map(L.wrap_label)
 single["Drives first fire today"] = single["on_driving_path"].map(pct)
 single["Change in chance"] = single["delta_p_on_target"].map(pts)
 single["Breaks the link"] = single["link"].str.replace(" -> ", " → ", regex=False)
@@ -72,7 +72,9 @@ else:
     # Leave room right of the longest bar for its text label.
     fig.update_xaxes(title="P50 gain (days)", range=[0, max(1.0, float(useful["gain_p50_days"].max())) * 1.3])
     fig.update_yaxes(title=None, categoryorder="array", categoryarray=list(plot["label"]))
-    show(styled(fig, 130 + 52 * len(useful), legend=True, legend_title="Link type"))
+    # A wrapped two-line label needs more row height than a one-line one.
+    row_h = 60 if plot["label"].str.contains("<br>").any() else 52
+    show(styled(fig, 130 + row_h * len(useful), legend=True, legend_title="Link type"))
     st.caption("Each proposal breaks one soft link and re-runs the same simulated futures, so the "
                "difference comes from the logic change alone. A proposal whose link rarely drives first "
                "fire gains little, because another path takes over.")

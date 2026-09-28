@@ -185,6 +185,22 @@ def cap(text: str, limit: int = CHART_LABEL_MAX) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip(" ,;:") + "…"
 
 
+def wrap_label(text: str, limit: int = CHART_LABEL_MAX) -> str:
+    """
+    Chart category label that keeps the full text: wraps onto two lines
+    (Plotly '<br>') instead of truncating with an ellipsis when it would
+    otherwise exceed `limit` characters on one line. Falls back to `cap` on
+    the second line for the rare label too long to fit in two.
+    """
+    text = str(text)
+    if len(text) <= limit:
+        return text
+    lines = textwrap.wrap(text, width=limit, break_long_words=False) or [text]
+    if len(lines) <= 2:
+        return "<br>".join(lines)
+    return f"{lines[0]}<br>{cap(' '.join(lines[1:]), limit)}"
+
+
 HOVER_WRAP_WIDTH = 60   # Plotly hover boxes do not wrap on their own; long single
 
 
